@@ -1,0 +1,18 @@
+# Compiled output
+build/
+dist/
+
+# Dependencies
+node_modules/
+
+# Tests & coverage
+coverage/
+*.test.ts
+*.spec.ts
+
+# Misc
+.env
+.env.*
+*.log
+.DS_Store
+.vscode/
