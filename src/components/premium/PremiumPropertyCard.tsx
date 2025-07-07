@@ -1,10 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, MapPin, Bed, Bath, Move, Eye, TrendingUp } from 'lucide-react';
+import { Heart, MapPin, Bed, Bath, Move, Eye, TrendingUp, Home } from 'lucide-react';
 import { Property } from '../../types';
 import { PremiumListing } from '../../types/premium';
 import { formatPrice } from '../../utils/formatter';
 import PremiumBadge from './PremiumBadge';
+import { premiumService } from '../../services/premiumService';
 
 interface PremiumPropertyCardProps {
   property: Property;
@@ -28,22 +29,36 @@ const PremiumPropertyCard: React.FC<PremiumPropertyCardProps> = ({
     bedrooms,
     bathrooms,
     buildingSize,
+    floors,
     images,
   } = property;
 
   const isPremium = !!premiumListing;
 
   const handleCardClick = () => {
-    if (onAnalyticsUpdate) {
-      onAnalyticsUpdate('view');
+    if (isPremium) {
+      // Update analytics in Supabase
+      premiumService.updateAnalytics(id, 'view');
+      
+      // Call the callback if provided
+      if (onAnalyticsUpdate) {
+        onAnalyticsUpdate('view');
+      }
     }
   };
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (onAnalyticsUpdate) {
-      onAnalyticsUpdate('favorite');
+    
+    if (isPremium) {
+      // Update analytics in Supabase
+      premiumService.updateAnalytics(id, 'favorite');
+      
+      // Call the callback if provided
+      if (onAnalyticsUpdate) {
+        onAnalyticsUpdate('favorite');
+      }
     }
   };
 
@@ -73,6 +88,7 @@ const PremiumPropertyCard: React.FC<PremiumPropertyCardProps> = ({
             src={images[0]}
             alt={title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            loading="lazy"
           />
         </Link>
         
@@ -173,6 +189,13 @@ const PremiumPropertyCard: React.FC<PremiumPropertyCardProps> = ({
             <div className="flex items-center">
               <Move size={16} className="mr-1" />
               <span className="text-sm">{buildingSize} m²</span>
+            </div>
+          )}
+          
+          {floors !== undefined && (
+            <div className="flex items-center">
+              <Home size={16} className="mr-1" />
+              <span className="text-sm">{floors} floor{floors > 1 ? 's' : ''}</span>
             </div>
           )}
         </div>
