@@ -5,8 +5,12 @@ import DataTable, { Column } from '../../components/admin/DataTable';
 import { PremiumListing, PaymentData } from '../../types/premium';
 import { premiumService } from '../../services/premiumService';
 import { format } from 'date-fns';
+import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 
 const PremiumManagement: React.FC = () => {
+  const { user } = useAuth();
+  const { showError } = useToast();
   const [premiumListings, setPremiumListings] = useState<PremiumListing[]>([]);
   const [payments, setPayments] = useState<PaymentData[]>([]);
   const [selectedListing, setSelectedListing] = useState<PremiumListing | null>(null);
@@ -21,118 +25,23 @@ const PremiumManagement: React.FC = () => {
   const loadPremiumData = async () => {
     setIsLoading(true);
     try {
-      // In a real implementation, this would fetch from API
-      // For demo, we'll use mock data
-      const mockListings: PremiumListing[] = [
-        {
-          id: 'premium-1',
-          propertyId: '1',
-          userId: 'user-1',
-          plan: {
-            id: 'premium-monthly',
-            name: 'Premium Listing',
-            price: 29.99,
-            currency: 'USD',
-            duration: 30,
-            description: 'Premium listing with enhanced features',
-            features: ['Featured placement', 'Analytics', 'Extended gallery']
-          },
-          status: 'active',
-          startDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-          endDate: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString(),
-          paymentId: 'payment-1',
-          features: [],
-          analytics: {
-            views: 1250,
-            inquiries: 45,
-            favorites: 23,
-            conversionRate: 3.6,
-            dailyViews: [],
-            topSources: []
-          },
-          createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          id: 'premium-2',
-          propertyId: '2',
-          userId: 'user-2',
-          plan: {
-            id: 'premium-monthly',
-            name: 'Premium Listing',
-            price: 29.99,
-            currency: 'USD',
-            duration: 30,
-            description: 'Premium listing with enhanced features',
-            features: ['Featured placement', 'Analytics', 'Extended gallery']
-          },
-          status: 'expired',
-          startDate: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString(),
-          endDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-          paymentId: 'payment-2',
-          features: [],
-          analytics: {
-            views: 890,
-            inquiries: 32,
-            favorites: 18,
-            conversionRate: 3.6,
-            dailyViews: [],
-            topSources: []
-          },
-          createdAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      ];
-
-      const mockPayments: PaymentData[] = [
-        {
-          id: 'payment-1',
-          orderId: 'ORD-001',
-          amount: 29.99,
-          currency: 'USD',
-          status: 'success',
-          paymentMethod: 'credit_card',
-          transactionId: 'TXN-001',
-          createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-          updatedAt: new Date().toISOString(),
-          billingDetails: {
-            firstName: 'John',
-            lastName: 'Doe',
-            email: 'john@example.com',
-            phone: '+1234567890',
-            address: '123 Main St',
-            city: 'New York',
-            postalCode: '10001',
-            country: 'US'
-          }
-        },
-        {
-          id: 'payment-2',
-          orderId: 'ORD-002',
-          amount: 29.99,
-          currency: 'USD',
-          status: 'success',
-          paymentMethod: 'bank_transfer',
-          transactionId: 'TXN-002',
-          createdAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString(),
-          updatedAt: new Date().toISOString(),
-          billingDetails: {
-            firstName: 'Jane',
-            lastName: 'Smith',
-            email: 'jane@example.com',
-            phone: '+1234567891',
-            address: '456 Oak Ave',
-            city: 'Los Angeles',
-            postalCode: '90001',
-            country: 'US'
-          }
-        }
-      ];
-
-      setPremiumListings(mockListings);
-      setPayments(mockPayments);
-    } catch (error) {
-      console.error('Failed to load premium data:', error);
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Get all premium listings
+      const listings = await premiumService.getUserPremiumListings(user.id);
+      setPremiumListings(listings);
+      
+      // Get all payments
+      const paymentData = await premiumService.getUserPayments(user.id);
+      setPayments(paymentData);
+      
+      // Check for expired listings
+      await premiumService.checkExpiredListings();
+    } catch (err) {
+      console.error('Failed to load premium data:', err);
+      showError('Error', 'Failed to load premium data. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -171,7 +80,9 @@ const PremiumManagement: React.FC = () => {
 
   const activeListings = premiumListings.filter(l => l.status === 'active').length;
   const totalViews = premiumListings.reduce((sum, l) => sum + l.analytics.views, 0);
-  const avgConversion = premiumListings.reduce((sum, l) => sum + l.analytics.conversionRate, 0) / premiumListings.length;
+  const avgConversion = premiumListings.length > 0 
+    ? premiumListings.reduce((sum, l) => sum + l.analytics.conversionRate, 0) / premiumListings.length 
+    : 0;
 
   const columns: Column<PremiumListing>[] = [
     {
@@ -272,7 +183,10 @@ const PremiumManagement: React.FC = () => {
             </h1>
             <p className="text-neutral-600">Manage premium listings and track performance</p>
           </div>
-          <button className="btn-primary flex items-center">
+          <button 
+            className="btn-primary flex items-center"
+            onClick={() => loadPremiumData()}
+          >
             <Download size={18} className="mr-2" />
             Export Report
           </button>

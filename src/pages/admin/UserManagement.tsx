@@ -1,55 +1,88 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Edit, Trash2, Eye, UserPlus, MoreHorizontal } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import DataTable, { Column } from '../../components/admin/DataTable';
 import { User } from '../../contexts/AuthContext';
+import { userService } from '../../services/userService';
+import { useToast } from '../../contexts/ToastContext';
 
 const UserManagement: React.FC = () => {
-  const [users] = useState<User[]>([
-    {
-      id: '1',
-      name: 'John Doe',
-      email: 'john@example.com',
-      role: 'user',
-      status: 'active',
-      phone: '+62812345678',
-      createdAt: '2023-01-15T10:30:00Z',
-      lastLogin: '2024-01-15T09:15:00Z',
-    },
-    {
-      id: '2',
-      name: 'Jane Smith',
-      email: 'jane@example.com',
-      role: 'agent',
-      status: 'active',
-      phone: '+62812345679',
-      createdAt: '2023-02-20T14:20:00Z',
-      lastLogin: '2024-01-14T16:45:00Z',
-    },
-    {
-      id: '3',
-      name: 'Bob Wilson',
-      email: 'bob@example.com',
-      role: 'user',
-      status: 'suspended',
-      phone: '+62812345680',
-      createdAt: '2023-03-10T08:15:00Z',
-      lastLogin: '2024-01-10T11:30:00Z',
-    },
-  ]);
-
+  const { showSuccess, showError } = useToast();
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [showUserModal, setShowUserModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterRole, setFilterRole] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    setIsLoading(true);
+    try {
+      const filters: any = {};
+      
+      if (filterStatus !== 'all') {
+        filters.status = filterStatus;
+      }
+      
+      if (filterRole !== 'all') {
+        filters.role = filterRole;
+      }
+      
+      if (searchTerm) {
+        filters.search = searchTerm;
+      }
+      
+      const { data } = await userService.getAllUsers(filters);
+      setUsers(data);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      showError('Error', 'Failed to load users. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleEditUser = (user: User) => {
     setSelectedUser(user);
     setShowUserModal(true);
   };
 
-  const handleDeleteUser = (user: User) => {
-    if (confirm(`Apakah Anda yakin ingin menghapus pengguna ${user.name}?`)) {
-      // Handle delete logic here
-      console.log('Delete user:', user.id);
+  const handleDeleteUser = async (user: User) => {
+    if (confirm(`Are you sure you want to delete user ${user.full_name}?`)) {
+      try {
+        const success = await userService.deleteUser(user.id);
+        
+        if (success) {
+          showSuccess('User Deleted', `User ${user.full_name} has been deleted successfully.`);
+          fetchUsers(); // Refresh the user list
+        } else {
+          throw new Error('Failed to delete user');
+        }
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        showError('Error', 'Failed to delete user. Please try again.');
+      }
+    }
+  };
+
+  const handleChangeUserStatus = async (userId: string, status: 'active' | 'inactive' | 'suspended') => {
+    try {
+      const success = await userService.changeUserStatus(userId, status);
+      
+      if (success) {
+        showSuccess('Status Updated', `User status has been updated to ${status}.`);
+        fetchUsers(); // Refresh the user list
+      } else {
+        throw new Error('Failed to update user status');
+      }
+    } catch (error) {
+      console.error('Error changing user status:', error);
+      showError('Error', 'Failed to update user status. Please try again.');
     }
   };
 
@@ -81,14 +114,14 @@ const UserManagement: React.FC = () => {
 
   const columns: Column<User>[] = [
     {
-      key: 'name',
+      key: 'full_name',
       title: 'Nama',
       sortable: true,
       render: (value, record) => (
         <div className="flex items-center">
           <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center mr-3">
             <span className="text-sm font-medium text-primary">
-              {record.name.charAt(0).toUpperCase()}
+              {record.full_name.charAt(0).toUpperCase()}
             </span>
           </div>
           <div>
@@ -116,16 +149,10 @@ const UserManagement: React.FC = () => {
       render: (value) => value || '-',
     },
     {
-      key: 'createdAt',
+      key: 'created_at',
       title: 'Terdaftar',
       sortable: true,
       render: (value) => new Date(value).toLocaleDateString('id-ID'),
-    },
-    {
-      key: 'lastLogin',
-      title: 'Login Terakhir',
-      sortable: true,
-      render: (value) => value ? new Date(value).toLocaleDateString('id-ID') : 'Belum pernah',
     },
   ];
 
@@ -158,9 +185,41 @@ const UserManagement: React.FC = () => {
         }}
         className="p-1 text-neutral-500 hover:text-red-600"
         title="Hapus"
+        disabled={user.role === 'superadmin'}
       >
-        <Trash2 size={16} />
+        <Trash2 size={16} className={user.role === 'superadmin' ? 'opacity-50 cursor-not-allowed' : ''} />
       </button>
+      <div className="relative group">
+        <button
+          className="p-1 text-neutral-500 hover:text-neutral-700"
+          title="More Actions"
+        >
+          <MoreHorizontal size={16} />
+        </button>
+        <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-10 hidden group-hover:block">
+          <button
+            onClick={() => handleChangeUserStatus(user.id, 'active')}
+            className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50"
+            disabled={user.status === 'active'}
+          >
+            Activate
+          </button>
+          <button
+            onClick={() => handleChangeUserStatus(user.id, 'inactive')}
+            className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50"
+            disabled={user.status === 'inactive'}
+          >
+            Deactivate
+          </button>
+          <button
+            onClick={() => handleChangeUserStatus(user.id, 'suspended')}
+            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+            disabled={user.status === 'suspended'}
+          >
+            Suspend
+          </button>
+        </div>
+      </div>
     </div>
   );
 
@@ -190,14 +249,77 @@ const UserManagement: React.FC = () => {
         </div>
       </div>
 
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">
+              Status
+            </label>
+            <select
+              className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+              value={filterStatus}
+              onChange={(e) => {
+                setFilterStatus(e.target.value);
+                fetchUsers();
+              }}
+            >
+              <option value="all">Semua Status</option>
+              <option value="active">Aktif</option>
+              <option value="inactive">Tidak Aktif</option>
+              <option value="suspended">Ditangguhkan</option>
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">
+              Peran
+            </label>
+            <select
+              className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+              value={filterRole}
+              onChange={(e) => {
+                setFilterRole(e.target.value);
+                fetchUsers();
+              }}
+            >
+              <option value="all">Semua Peran</option>
+              <option value="user">Pengguna</option>
+              <option value="agent">Agen</option>
+              <option value="admin">Admin</option>
+              <option value="superadmin">Super Admin</option>
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">
+              Pencarian
+            </label>
+            <input
+              type="text"
+              className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+              placeholder="Cari nama atau email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  fetchUsers();
+                }
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
       <DataTable
         data={users}
         columns={columns}
         actions={renderActions}
-        searchable
-        filterable
+        searchable={false} // We're handling search manually
+        filterable={false} // We're handling filters manually
         pagination
         pageSize={10}
+        loading={isLoading}
         onRowClick={(user) => console.log('Row clicked:', user)}
       />
 

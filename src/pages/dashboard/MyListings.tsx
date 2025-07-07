@@ -16,28 +16,10 @@ import {
 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { formatPrice } from '../../utils/formatter';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-
-interface UserListing {
-  id: string;
-  title: string;
-  type: string;
-  purpose: 'jual' | 'sewa';
-  price: number;
-  priceUnit: 'juta' | 'miliar';
-  status: 'active' | 'inactive' | 'expired' | 'pending';
-  isPremium: boolean;
-  premiumExpiresAt?: string;
-  views: number;
-  createdAt: string;
-  image: string;
-  location: {
-    city: string;
-    province: string;
-  };
-}
+import { UserListing } from '../../types/listing';
+import { listingService } from '../../services/listingService';
 
 const MyListings: React.FC = () => {
   const { user } = useAuth();
@@ -104,74 +86,8 @@ const MyListings: React.FC = () => {
     
     setIsLoading(true);
     try {
-      // Fetch listings from Supabase
-      const { data: listingsData, error: listingsError } = await supabase
-        .from('listings')
-        .select('*')
-        .eq('user_id', user.id);
-
-      if (listingsError) throw listingsError;
-
-      // Process listings data
-      const processedListings: UserListing[] = [];
-      
-      for (const listing of listingsData || []) {
-        // Get the primary image for each listing
-        const { data: mediaData } = await supabase
-          .from('property_media')
-          .select('media_url')
-          .eq('listing_id', listing.id)
-          .eq('is_primary', true)
-          .single();
-          
-        // Get location parts
-        const locationParts = listing.location.split(', ');
-        const district = locationParts[0] || '';
-        const city = locationParts[1] || '';
-        const province = locationParts[2] || '';
-        
-        // Determine price unit based on price value
-        const priceValue = parseFloat(listing.price);
-        const priceUnit = priceValue >= 1000 ? 'miliar' : 'juta';
-        const normalizedPrice = priceUnit === 'miliar' ? priceValue / 1000 : priceValue;
-        
-        // Map status
-        let status: 'active' | 'inactive' | 'expired' | 'pending';
-        switch (listing.status) {
-          case 'tersedia':
-            status = 'active';
-            break;
-          case 'terjual':
-          case 'disewa':
-            status = 'inactive';
-            break;
-          default:
-            status = 'pending';
-        }
-        
-        // Check if listing has premium features (this would be implemented with a real premium service)
-        const isPremium = false; // Replace with actual premium check
-        
-        processedListings.push({
-          id: listing.id,
-          title: listing.title,
-          type: listing.property_type,
-          purpose: listing.status === 'tersedia' ? 'jual' : 'sewa',
-          price: normalizedPrice,
-          priceUnit: priceUnit,
-          status: status,
-          isPremium: isPremium,
-          views: 0, // This would come from analytics in a real implementation
-          createdAt: listing.created_at,
-          image: mediaData?.media_url || 'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg',
-          location: {
-            city: city,
-            province: province
-          }
-        });
-      }
-      
-      setListings(processedListings);
+      const userListings = await listingService.getUserListings(user.id);
+      setListings(userListings);
     } catch (error) {
       console.error('Error fetching listings:', error);
       showError('Error', 'Failed to load your listings. Please try again.');
@@ -181,34 +97,23 @@ const MyListings: React.FC = () => {
   };
 
   const handleDeleteListing = async (listingId: string) => {
-    if (confirm('Apakah Anda yakin ingin menghapus iklan ini?')) {
-      setIsLoading(true);
-      try {
-        // First delete associated media
-        const { error: mediaError } = await supabase
-          .from('property_media')
-          .delete()
-          .eq('listing_id', listingId);
-          
-        if (mediaError) throw mediaError;
-        
-        // Then delete the listing
-        const { error } = await supabase
-          .from('listings')
-          .delete()
-          .eq('id', listingId);
-          
-        if (error) throw error;
-        
-        // Update local state
+    if (!user) return;
+    
+    setIsLoading(true);
+    try {
+      const success = await listingService.deleteListing(listingId, user.id);
+      
+      if (success) {
         setListings(prev => prev.filter(listing => listing.id !== listingId));
         showSuccess('Listing Deleted', 'Your property listing has been deleted successfully.');
-      } catch (error: any) {
-        console.error('Error deleting listing:', error);
-        showError('Error', error.message || 'Failed to delete listing. Please try again.');
-      } finally {
-        setIsLoading(false);
+      } else {
+        throw new Error('Failed to delete listing');
       }
+    } catch (error: any) {
+      console.error('Error deleting listing:', error);
+      showError('Error', error.message || 'Failed to delete listing. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -339,8 +244,12 @@ const MyListings: React.FC = () => {
                 <option value="all">Semua Jenis</option>
                 <option value="rumah">Rumah</option>
                 <option value="apartemen">Apartemen</option>
+                <option value="kondominium">Kondominium</option>
                 <option value="ruko">Ruko</option>
+                <option value="gedung_komersial">Gedung Komersial</option>
+                <option value="ruang_industri">Ruang Industri</option>
                 <option value="tanah">Tanah</option>
+                <option value="lainnya">Lainnya</option>
               </select>
             </div>
 
@@ -372,6 +281,7 @@ const MyListings: React.FC = () => {
                   src={listing.image}
                   alt={listing.title}
                   className="w-full h-full object-cover"
+                  loading="lazy"
                 />
                 {listing.isPremium && (
                   <div className="absolute top-2 left-2">

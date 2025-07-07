@@ -12,38 +12,46 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
-import { mockAnalyticsData } from '../../data/analytics';
 import { AnalyticsData } from '../../types/analytics';
+import { analyticsService } from '../../services/analyticsService';
 import MetricCard from '../../components/admin/charts/MetricCard';
 import BarChart from '../../components/admin/charts/BarChart';
 import LineChart from '../../components/admin/charts/LineChart';
 import PieChart from '../../components/admin/charts/PieChart';
 import DataTable, { Column } from '../../components/admin/DataTable';
+import { useToast } from '../../contexts/ToastContext';
 
 const Analytics: React.FC = () => {
-  const [analyticsData, setAnalyticsData] = useState<AnalyticsData>(mockAnalyticsData);
+  const { showError } = useToast();
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate data loading based on date range
-    setIsLoading(true);
-    setTimeout(() => {
-      setAnalyticsData(mockAnalyticsData);
-      setIsLoading(false);
-    }, 500);
+    loadAnalyticsData();
   }, [dateRange]);
 
-  const handleRefresh = () => {
+  const loadAnalyticsData = async () => {
     setIsLoading(true);
-    setTimeout(() => {
-      setAnalyticsData(mockAnalyticsData);
+    try {
+      const data = await analyticsService.getAnalyticsData(dateRange);
+      setAnalyticsData(data);
+    } catch (error) {
+      console.error('Failed to load analytics data:', error);
+      showError('Error', 'Failed to load analytics data. Please try again.');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
+  };
+
+  const handleRefresh = () => {
+    loadAnalyticsData();
   };
 
   const handleExport = () => {
-    // Simulate export functionality
+    if (!analyticsData) return;
+    
+    // Export analytics data as JSON
     const dataStr = JSON.stringify(analyticsData, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
@@ -53,6 +61,29 @@ const Analytics: React.FC = () => {
     link.click();
     URL.revokeObjectURL(url);
   };
+
+  if (isLoading && !analyticsData) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!analyticsData) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <h2 className="text-lg font-semibold text-red-800">Failed to load analytics data</h2>
+        <p className="text-red-700 mb-4">There was an error loading the analytics data.</p>
+        <button 
+          onClick={handleRefresh}
+          className="btn-primary"
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  }
 
   // Prepare data for charts
   const listingsByTypeData = Object.entries(analyticsData.listingsByType).map(([type, count]) => ({
@@ -179,8 +210,6 @@ const Analytics: React.FC = () => {
         <MetricCard
           title="Total Listing"
           value={analyticsData.overview.totalListings.toLocaleString()}
-          change={8.5}
-          changeLabel="vs bulan lalu"
           icon={<Home size={24} />}
           color="bg-blue-500"
         />
@@ -188,8 +217,6 @@ const Analytics: React.FC = () => {
         <MetricCard
           title="Total Pengguna"
           value={analyticsData.overview.totalUsers.toLocaleString()}
-          change={12.3}
-          changeLabel="vs bulan lalu"
           icon={<Users size={24} />}
           color="bg-green-500"
         />
@@ -197,8 +224,6 @@ const Analytics: React.FC = () => {
         <MetricCard
           title="Total Views"
           value={analyticsData.overview.totalViews.toLocaleString()}
-          change={15.7}
-          changeLabel="vs bulan lalu"
           icon={<Eye size={24} />}
           color="bg-primary"
         />
@@ -206,8 +231,6 @@ const Analytics: React.FC = () => {
         <MetricCard
           title="Conversion Rate"
           value={`${analyticsData.overview.conversionRate}%`}
-          change={2.1}
-          changeLabel="vs bulan lalu"
           icon={<TrendingUp size={24} />}
           color="bg-purple-500"
         />
@@ -218,8 +241,6 @@ const Analytics: React.FC = () => {
         <MetricCard
           title="Listing Aktif Hari Ini"
           value={analyticsData.activeListingsToday.toLocaleString()}
-          change={5.2}
-          changeLabel="vs kemarin"
           icon={<Calendar size={24} />}
           color="bg-yellow-500"
         />
@@ -227,8 +248,6 @@ const Analytics: React.FC = () => {
         <MetricCard
           title="Listing Aktif Minggu Ini"
           value={analyticsData.activeListingsThisWeek.toLocaleString()}
-          change={8.9}
-          changeLabel="vs minggu lalu"
           icon={<Calendar size={24} />}
           color="bg-indigo-500"
         />
@@ -256,7 +275,10 @@ const Analytics: React.FC = () => {
       {/* User Registrations Over Time */}
       <div className="mb-8">
         <LineChart
-          data={userRegistrationData}
+          data={userRegistrationData.map(item => ({
+            date: item.date,
+            value: item.count,
+          }))}
           title="Registrasi Pengguna (14 Hari Terakhir)"
           height={300}
           color="#10B981"

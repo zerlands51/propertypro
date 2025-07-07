@@ -3,9 +3,11 @@ import { Edit, Trash2, Plus, Eye, EyeOff, ChevronRight, ChevronDown, MapPin } fr
 import { Helmet } from 'react-helmet-async';
 import DataTable, { Column } from '../../components/admin/DataTable';
 import { Location, LocationHierarchy } from '../../types/admin';
-import { adminLocations, buildLocationHierarchy } from '../../data/adminLocations';
+import { locationService } from '../../services/locationService';
+import { useToast } from '../../contexts/ToastContext';
 
 const LocationManagement: React.FC = () => {
+  const { showSuccess, showError } = useToast();
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationHierarchy, setLocationHierarchy] = useState<LocationHierarchy[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
@@ -14,41 +16,111 @@ const LocationManagement: React.FC = () => {
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setLocations(adminLocations);
-    setLocationHierarchy(buildLocationHierarchy(adminLocations));
-  }, []);
+    fetchLocations();
+  }, [filterType, filterStatus]);
 
-  const handleStatusToggle = (locationId: string) => {
-    setLocations(prev => {
-      const updated = prev.map(location => 
-        location.id === locationId 
-          ? { ...location, isActive: !location.isActive, updatedAt: new Date().toISOString() }
-          : location
-      );
-      setLocationHierarchy(buildLocationHierarchy(updated));
-      return updated;
-    });
+  const fetchLocations = async () => {
+    setIsLoading(true);
+    try {
+      const filters: any = {};
+      
+      if (filterType !== 'all') {
+        filters.type = filterType;
+      }
+      
+      if (filterStatus === 'active') {
+        filters.isActive = true;
+      } else if (filterStatus === 'inactive') {
+        filters.isActive = false;
+      }
+      
+      const data = await locationService.getAllLocations(filters);
+      setLocations(data);
+      setLocationHierarchy(locationService.buildLocationHierarchy(data));
+    } catch (error) {
+      console.error('Error fetching locations:', error);
+      showError('Error', 'Failed to load locations. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleDeleteLocation = (location: Location) => {
+  const handleStatusToggle = async (locationId: string) => {
+    try {
+      const location = locations.find(l => l.id === locationId);
+      if (!location) return;
+      
+      const newStatus = !location.isActive;
+      const success = await locationService.toggleLocationStatus(locationId, newStatus);
+      
+      if (success) {
+        setLocations(prev => 
+          prev.map(location => 
+            location.id === locationId 
+              ? { ...location, isActive: newStatus, updatedAt: new Date().toISOString() }
+              : location
+          )
+        );
+        setLocationHierarchy(locationService.buildLocationHierarchy(
+          locations.map(location => 
+            location.id === locationId 
+              ? { ...location, isActive: newStatus, updatedAt: new Date().toISOString() }
+              : location
+          )
+        ));
+        
+        showSuccess(
+          'Status Updated', 
+          `Location "${location.name}" is now ${newStatus ? 'active' : 'inactive'}.`
+        );
+      } else {
+        throw new Error('Failed to update location status');
+      }
+    } catch (error) {
+      console.error('Error toggling location status:', error);
+      showError('Error', 'Failed to update location status. Please try again.');
+    }
+  };
+
+  const handleDeleteLocation = async (location: Location) => {
     if (location.propertyCount > 0) {
-      alert(`Tidak dapat menghapus lokasi "${location.name}" karena masih memiliki ${location.propertyCount} properti.`);
+      showError(
+        'Cannot Delete Location', 
+        `Location "${location.name}" still has ${location.propertyCount} properties.`
+      );
       return;
     }
     
     // Check if location has children
     const hasChildren = locations.some(l => l.parentId === location.id);
     if (hasChildren) {
-      alert(`Tidak dapat menghapus lokasi "${location.name}" karena masih memiliki sub-lokasi.`);
+      showError(
+        'Cannot Delete Location', 
+        `Location "${location.name}" still has sub-locations.`
+      );
       return;
     }
     
-    if (confirm(`Apakah Anda yakin ingin menghapus lokasi "${location.name}"?`)) {
-      const updated = locations.filter(l => l.id !== location.id);
-      setLocations(updated);
-      setLocationHierarchy(buildLocationHierarchy(updated));
+    if (confirm(`Are you sure you want to delete location "${location.name}"?`)) {
+      try {
+        const success = await locationService.deleteLocation(location.id);
+        
+        if (success) {
+          const updatedLocations = locations.filter(l => l.id !== location.id);
+          setLocations(updatedLocations);
+          setLocationHierarchy(locationService.buildLocationHierarchy(updatedLocations));
+          
+          showSuccess('Location Deleted', `Location "${location.name}" has been deleted successfully.`);
+        } else {
+          throw new Error('Failed to delete location');
+        }
+      } catch (error) {
+        console.error('Error deleting location:', error);
+        showError('Error', 'Failed to delete location. Please try again.');
+      }
     }
   };
 
@@ -425,6 +497,7 @@ const LocationManagement: React.FC = () => {
           searchable
           pagination
           pageSize={10}
+          loading={isLoading}
           onRowClick={(location) => handleEditLocation(location)}
         />
       ) : (
@@ -432,9 +505,21 @@ const LocationManagement: React.FC = () => {
           <div className="p-4 border-b border-neutral-200">
             <h3 className="font-medium text-neutral-900">Hierarki Lokasi</h3>
           </div>
-          <div className="max-h-96 overflow-y-auto">
-            {locationHierarchy.map(node => renderHierarchyNode(node))}
-          </div>
+          {isLoading ? (
+            <div className="p-8 flex justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : (
+            <div className="max-h-96 overflow-y-auto">
+              {locationHierarchy.length > 0 ? (
+                locationHierarchy.map(node => renderHierarchyNode(node))
+              ) : (
+                <div className="p-8 text-center text-neutral-500">
+                  Tidak ada data lokasi yang ditemukan
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -444,17 +529,41 @@ const LocationManagement: React.FC = () => {
           location={selectedLocation}
           locations={locations}
           onClose={() => setShowLocationModal(false)}
-          onSave={(location) => {
-            if (selectedLocation) {
-              const updated = locations.map(l => l.id === location.id ? location : l);
-              setLocations(updated);
-              setLocationHierarchy(buildLocationHierarchy(updated));
-            } else {
-              const updated = [...locations, location];
-              setLocations(updated);
-              setLocationHierarchy(buildLocationHierarchy(updated));
+          onSave={async (location) => {
+            try {
+              if (selectedLocation) {
+                // Update existing location
+                const updatedLocation = await locationService.updateLocation(location.id, location);
+                
+                if (updatedLocation) {
+                  const updatedLocations = locations.map(l => l.id === location.id ? updatedLocation : l);
+                  setLocations(updatedLocations);
+                  setLocationHierarchy(locationService.buildLocationHierarchy(updatedLocations));
+                  
+                  showSuccess('Location Updated', `Location "${location.name}" has been updated successfully.`);
+                } else {
+                  throw new Error('Failed to update location');
+                }
+              } else {
+                // Create new location
+                const newLocation = await locationService.createLocation(location);
+                
+                if (newLocation) {
+                  const updatedLocations = [...locations, newLocation];
+                  setLocations(updatedLocations);
+                  setLocationHierarchy(locationService.buildLocationHierarchy(updatedLocations));
+                  
+                  showSuccess('Location Created', `Location "${location.name}" has been created successfully.`);
+                } else {
+                  throw new Error('Failed to create location');
+                }
+              }
+              
+              setShowLocationModal(false);
+            } catch (error) {
+              console.error('Error saving location:', error);
+              showError('Error', 'Failed to save location. Please try again.');
             }
-            setShowLocationModal(false);
           }}
         />
       )}
@@ -488,6 +597,49 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
       longitude: location?.coordinates?.longitude || 0,
     },
   });
+  const [availableParents, setAvailableParents] = useState<Location[]>([]);
+  const [isLoadingParents, setIsLoadingParents] = useState(false);
+  const { showError } = useToast();
+
+  useEffect(() => {
+    loadAvailableParents();
+  }, [formData.type]);
+
+  const loadAvailableParents = async () => {
+    const typeHierarchy = {
+      province: [],
+      city: ['province'],
+      district: ['city'],
+      subdistrict: ['district'],
+    };
+    
+    const allowedParentTypes = typeHierarchy[formData.type as keyof typeof typeHierarchy];
+    
+    if (allowedParentTypes.length === 0) {
+      setAvailableParents([]);
+      return;
+    }
+    
+    setIsLoadingParents(true);
+    try {
+      const filters = {
+        type: allowedParentTypes[0],
+        isActive: true,
+      };
+      
+      const parents = await locationService.getAllLocations(filters);
+      
+      // Filter out the current location to prevent circular references
+      setAvailableParents(
+        parents.filter(p => p.id !== location?.id)
+      );
+    } catch (error) {
+      console.error('Error loading available parents:', error);
+      showError('Error', 'Failed to load parent locations. Please try again.');
+    } finally {
+      setIsLoadingParents(false);
+    }
+  };
 
   const generateSlug = (name: string) => {
     return name
@@ -504,22 +656,6 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
       name,
       slug: generateSlug(name),
     }));
-  };
-
-  const getAvailableParents = () => {
-    const typeHierarchy = {
-      province: [],
-      city: ['province'],
-      district: ['city'],
-      subdistrict: ['district'],
-    };
-    
-    const allowedParentTypes = typeHierarchy[formData.type];
-    return locations.filter(l => 
-      allowedParentTypes.includes(l.type) && 
-      l.id !== location?.id &&
-      l.isActive
-    );
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -603,14 +739,18 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
                   value={formData.parentId}
                   onChange={(e) => setFormData(prev => ({ ...prev, parentId: e.target.value }))}
                   required
+                  disabled={isLoadingParents}
                 >
                   <option value="">Pilih Parent Lokasi</option>
-                  {getAvailableParents().map(parent => (
+                  {availableParents.map(parent => (
                     <option key={parent.id} value={parent.id}>
                       {parent.name}
                     </option>
                   ))}
                 </select>
+                {isLoadingParents && (
+                  <div className="text-xs text-neutral-500 mt-1">Loading parent locations...</div>
+                )}
               </div>
             )}
             

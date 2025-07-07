@@ -3,16 +3,18 @@ import { Edit, Trash2, Eye, Plus, CheckCircle, XCircle, Clock, Image, MapPin } f
 import { Helmet } from 'react-helmet-async';
 import DataTable, { Column } from '../../components/admin/DataTable';
 import { Property } from '../../types';
-import { properties as mockProperties } from '../../data/properties';
 import { formatPrice } from '../../utils/formatter';
+import { listingService } from '../../services/listingService';
+import { useToast } from '../../contexts/ToastContext';
+import PropertyStatusBadge from '../../components/admin/PropertyStatusBadge';
+import PropertyQuickActions from '../../components/admin/PropertyQuickActions';
 
 interface PropertyWithStatus extends Property {
   status: 'pending' | 'approved' | 'rejected' | 'published' | 'unpublished';
-  views: number;
-  inquiries: number;
 }
 
 const PropertyManagement: React.FC = () => {
+  const { showSuccess, showError } = useToast();
   const [properties, setProperties] = useState<PropertyWithStatus[]>([]);
   const [selectedProperty, setSelectedProperty] = useState<PropertyWithStatus | null>(null);
   const [showPropertyModal, setShowPropertyModal] = useState(false);
@@ -20,31 +22,89 @@ const PropertyManagement: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterPurpose, setFilterPurpose] = useState<string>('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   useEffect(() => {
-    // Convert mock properties to properties with status
-    const propertiesWithStatus: PropertyWithStatus[] = mockProperties.map((property, index) => ({
-      ...property,
-      status: ['pending', 'approved', 'published', 'unpublished'][index % 4] as any,
-      views: Math.floor(Math.random() * 1000) + 50,
-      inquiries: Math.floor(Math.random() * 50) + 1,
-    }));
-    setProperties(propertiesWithStatus);
-  }, []);
+    fetchProperties();
+  }, [filterStatus, filterType, filterPurpose, currentPage]);
 
-  const handleStatusChange = (propertyId: string, newStatus: PropertyWithStatus['status']) => {
-    setProperties(prev => 
-      prev.map(property => 
-        property.id === propertyId 
-          ? { ...property, status: newStatus }
-          : property
-      )
-    );
+  const fetchProperties = async () => {
+    setIsLoading(true);
+    try {
+      const filters: any = {};
+      
+      if (filterStatus !== 'all') {
+        filters.status = filterStatus;
+      }
+      
+      if (filterType !== 'all') {
+        filters.type = filterType;
+      }
+      
+      if (filterPurpose !== 'all') {
+        filters.purpose = filterPurpose;
+      }
+      
+      const { data, count } = await listingService.getAllListings(filters, currentPage, pageSize);
+      setProperties(data as PropertyWithStatus[]);
+      setTotalCount(count);
+    } catch (error) {
+      console.error('Error fetching properties:', error);
+      showError('Error', 'Failed to load properties. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleDeleteProperty = (property: PropertyWithStatus) => {
-    if (confirm(`Apakah Anda yakin ingin menghapus properti "${property.title}"?`)) {
-      setProperties(prev => prev.filter(p => p.id !== property.id));
+  const handleStatusChange = async (propertyId: string, newStatus: PropertyWithStatus['status']) => {
+    try {
+      const property = properties.find(p => p.id === propertyId);
+      if (!property) return;
+      
+      const success = await listingService.updateListingStatus(propertyId, newStatus);
+      
+      if (success) {
+        setProperties(prev => 
+          prev.map(property => 
+            property.id === propertyId 
+              ? { ...property, status: newStatus }
+              : property
+          )
+        );
+        
+        showSuccess(
+          'Status Updated', 
+          `Property status has been updated to ${newStatus}.`
+        );
+      } else {
+        throw new Error('Failed to update property status');
+      }
+    } catch (error) {
+      console.error('Error updating property status:', error);
+      showError('Error', 'Failed to update property status. Please try again.');
+    }
+  };
+
+  const handleDeleteProperty = async (property: PropertyWithStatus) => {
+    if (confirm(`Are you sure you want to delete property "${property.title}"?`)) {
+      try {
+        // In a real implementation, we would use the current admin user ID
+        const adminId = 'admin-user-id';
+        const success = await listingService.deleteListing(property.id, adminId);
+        
+        if (success) {
+          setProperties(prev => prev.filter(p => p.id !== property.id));
+          showSuccess('Property Deleted', `Property "${property.title}" has been deleted successfully.`);
+        } else {
+          throw new Error('Failed to delete property');
+        }
+      } catch (error) {
+        console.error('Error deleting property:', error);
+        showError('Error', 'Failed to delete property. Please try again.');
+      }
     }
   };
 
@@ -56,26 +116,6 @@ const PropertyManagement: React.FC = () => {
   const handleViewProperty = (property: PropertyWithStatus) => {
     setSelectedProperty(property);
     setShowDetailModal(true);
-  };
-
-  const getStatusBadge = (status: PropertyWithStatus['status']) => {
-    const statusConfig = {
-      pending: { label: 'Menunggu Review', className: 'bg-yellow-100 text-yellow-800', icon: Clock },
-      approved: { label: 'Disetujui', className: 'bg-blue-100 text-blue-800', icon: CheckCircle },
-      rejected: { label: 'Ditolak', className: 'bg-red-100 text-red-800', icon: XCircle },
-      published: { label: 'Dipublikasi', className: 'bg-green-100 text-green-800', icon: CheckCircle },
-      unpublished: { label: 'Tidak Dipublikasi', className: 'bg-gray-100 text-gray-800', icon: XCircle },
-    };
-    
-    const config = statusConfig[status];
-    const Icon = config.icon;
-    
-    return (
-      <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${config.className}`}>
-        <Icon size={12} className="mr-1" />
-        {config.label}
-      </span>
-    );
   };
 
   const getTypeLabel = (type: string) => {
@@ -93,12 +133,7 @@ const PropertyManagement: React.FC = () => {
   };
 
   // Filter properties based on selected filters
-  const filteredProperties = properties.filter(property => {
-    if (filterStatus !== 'all' && property.status !== filterStatus) return false;
-    if (filterType !== 'all' && property.type !== filterType) return false;
-    if (filterPurpose !== 'all' && property.purpose !== filterPurpose) return false;
-    return true;
-  });
+  const filteredProperties = properties;
 
   const columns: Column<PropertyWithStatus>[] = [
     {
@@ -113,6 +148,7 @@ const PropertyManagement: React.FC = () => {
                 src={record.images[0]} 
                 alt={record.title}
                 className="w-full h-full object-cover"
+                loading="lazy"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
@@ -149,7 +185,7 @@ const PropertyManagement: React.FC = () => {
       key: 'status',
       title: 'Status',
       sortable: true,
-      render: (value) => getStatusBadge(value),
+      render: (value) => <PropertyStatusBadge status={value} />,
     },
     {
       key: 'agent.name',
@@ -165,13 +201,13 @@ const PropertyManagement: React.FC = () => {
       key: 'views',
       title: 'Views',
       sortable: true,
-      render: (value) => value.toLocaleString(),
+      render: (value) => value?.toLocaleString() || '0',
     },
     {
       key: 'inquiries',
       title: 'Inquiries',
       sortable: true,
-      render: (value) => value.toLocaleString(),
+      render: (value) => value?.toLocaleString() || '0',
     },
     {
       key: 'createdAt',
@@ -216,6 +252,13 @@ const PropertyManagement: React.FC = () => {
     </div>
   );
 
+  const handleResetFilters = () => {
+    setFilterStatus('all');
+    setFilterType('all');
+    setFilterPurpose('all');
+    setCurrentPage(1);
+  };
+
   return (
     <div>
       <Helmet>
@@ -252,7 +295,10 @@ const PropertyManagement: React.FC = () => {
             <select
               className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
               value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
+              onChange={(e) => {
+                setFilterStatus(e.target.value);
+                setCurrentPage(1);
+              }}
             >
               <option value="all">Semua Status</option>
               <option value="pending">Menunggu Review</option>
@@ -270,15 +316,18 @@ const PropertyManagement: React.FC = () => {
             <select
               className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
               value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
+              onChange={(e) => {
+                setFilterType(e.target.value);
+                setCurrentPage(1);
+              }}
             >
               <option value="all">Semua Tipe</option>
               <option value="rumah">Rumah</option>
               <option value="apartemen">Apartemen</option>
               <option value="kondominium">Kondominium</option>
               <option value="ruko">Ruko</option>
-              <option value="gedung-komersial">Gedung Komersial</option>
-              <option value="ruang-industri">Ruang Industri</option>
+              <option value="gedung_komersial">Gedung Komersial</option>
+              <option value="ruang_industri">Ruang Industri</option>
               <option value="tanah">Tanah</option>
               <option value="lainnya">Lainnya</option>
             </select>
@@ -291,7 +340,10 @@ const PropertyManagement: React.FC = () => {
             <select
               className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
               value={filterPurpose}
-              onChange={(e) => setFilterPurpose(e.target.value)}
+              onChange={(e) => {
+                setFilterPurpose(e.target.value);
+                setCurrentPage(1);
+              }}
             >
               <option value="all">Semua Tujuan</option>
               <option value="jual">Dijual</option>
@@ -301,11 +353,7 @@ const PropertyManagement: React.FC = () => {
           
           <div className="flex items-end">
             <button
-              onClick={() => {
-                setFilterStatus('all');
-                setFilterType('all');
-                setFilterPurpose('all');
-              }}
+              onClick={handleResetFilters}
               className="w-full px-4 py-2 border border-neutral-300 rounded-lg hover:bg-neutral-50"
             >
               Reset Filter
@@ -318,7 +366,7 @@ const PropertyManagement: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow-sm p-4">
           <div className="text-2xl font-bold text-neutral-900">
-            {properties.length}
+            {totalCount}
           </div>
           <div className="text-sm text-neutral-600">Total Properti</div>
         </div>
@@ -342,7 +390,7 @@ const PropertyManagement: React.FC = () => {
         </div>
         <div className="bg-white rounded-lg shadow-sm p-4">
           <div className="text-2xl font-bold text-blue-600">
-            {properties.reduce((sum, p) => sum + p.views, 0).toLocaleString()}
+            {properties.reduce((sum, p) => sum + (p.views || 0), 0).toLocaleString()}
           </div>
           <div className="text-sm text-neutral-600">Total Views</div>
         </div>
@@ -354,7 +402,8 @@ const PropertyManagement: React.FC = () => {
         actions={renderActions}
         searchable
         pagination
-        pageSize={10}
+        pageSize={pageSize}
+        loading={isLoading}
         onRowClick={(property) => handleViewProperty(property)}
       />
 
@@ -372,15 +421,73 @@ const PropertyManagement: React.FC = () => {
         <PropertyFormModal
           property={selectedProperty}
           onClose={() => setShowPropertyModal(false)}
-          onSave={(property) => {
-            if (selectedProperty) {
-              setProperties(prev => 
-                prev.map(p => p.id === property.id ? property : p)
-              );
-            } else {
-              setProperties(prev => [...prev, property]);
+          onSave={async (property) => {
+            try {
+              if (selectedProperty) {
+                // Update existing property
+                const adminId = 'admin-user-id'; // In a real implementation, get from auth context
+                const success = await listingService.updateListing(property.id, {
+                  title: property.title,
+                  description: property.description,
+                  price: property.price,
+                  priceUnit: property.priceUnit as 'juta' | 'miliar',
+                  propertyType: property.type as any,
+                  purpose: property.purpose as 'jual' | 'sewa',
+                  bedrooms: property.bedrooms || 0,
+                  bathrooms: property.bathrooms || 0,
+                  buildingSize: property.buildingSize || 0,
+                  landSize: property.landSize || 0,
+                  province: '',
+                  city: '',
+                  district: '',
+                  address: '',
+                  features: property.features,
+                  images: property.images,
+                  makePremium: false
+                }, adminId);
+                
+                if (success) {
+                  showSuccess('Property Updated', `Property "${property.title}" has been updated successfully.`);
+                  fetchProperties();
+                } else {
+                  throw new Error('Failed to update property');
+                }
+              } else {
+                // Create new property
+                const adminId = 'admin-user-id'; // In a real implementation, get from auth context
+                const newPropertyId = await listingService.createListing({
+                  title: property.title,
+                  description: property.description,
+                  price: property.price,
+                  priceUnit: property.priceUnit as 'juta' | 'miliar',
+                  propertyType: property.type as any,
+                  purpose: property.purpose as 'jual' | 'sewa',
+                  bedrooms: property.bedrooms || 0,
+                  bathrooms: property.bathrooms || 0,
+                  buildingSize: property.buildingSize || 0,
+                  landSize: property.landSize || 0,
+                  province: '',
+                  city: '',
+                  district: '',
+                  address: '',
+                  features: property.features,
+                  images: property.images,
+                  makePremium: false
+                }, adminId);
+                
+                if (newPropertyId) {
+                  showSuccess('Property Created', `Property "${property.title}" has been created successfully.`);
+                  fetchProperties();
+                } else {
+                  throw new Error('Failed to create property');
+                }
+              }
+              
+              setShowPropertyModal(false);
+            } catch (error) {
+              console.error('Error saving property:', error);
+              showError('Error', 'Failed to save property. Please try again.');
             }
-            setShowPropertyModal(false);
           }}
         />
       )}
@@ -426,6 +533,7 @@ const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                   src={property.images[activeImageIndex]} 
                   alt={property.title}
                   className="w-full h-full object-cover"
+                  loading="lazy"
                 />
               </div>
               <div className="flex gap-2 overflow-x-auto">
@@ -441,6 +549,7 @@ const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                       src={image} 
                       alt={`${property.title} ${index + 1}`}
                       className="w-full h-full object-cover"
+                      loading="lazy"
                     />
                   </button>
                 ))}
@@ -519,32 +628,11 @@ const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
               {/* Status Actions */}
               <div className="border-t pt-4">
                 <span className="text-sm text-neutral-500 block mb-2">Ubah Status</span>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => onStatusChange(property.id, 'approved')}
-                    className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded hover:bg-blue-200"
-                  >
-                    Setujui
-                  </button>
-                  <button
-                    onClick={() => onStatusChange(property.id, 'rejected')}
-                    className="px-3 py-1 bg-red-100 text-red-800 text-sm rounded hover:bg-red-200"
-                  >
-                    Tolak
-                  </button>
-                  <button
-                    onClick={() => onStatusChange(property.id, 'published')}
-                    className="px-3 py-1 bg-green-100 text-green-800 text-sm rounded hover:bg-green-200"
-                  >
-                    Publikasikan
-                  </button>
-                  <button
-                    onClick={() => onStatusChange(property.id, 'unpublished')}
-                    className="px-3 py-1 bg-gray-100 text-gray-800 text-sm rounded hover:bg-gray-200"
-                  >
-                    Batalkan Publikasi
-                  </button>
-                </div>
+                <PropertyQuickActions
+                  propertyId={property.id}
+                  currentStatus={property.status}
+                  onStatusChange={onStatusChange}
+                />
               </div>
             </div>
           </div>
@@ -577,7 +665,11 @@ const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
     bathrooms: property?.bathrooms || 0,
     buildingSize: property?.buildingSize || 0,
     landSize: property?.landSize || 0,
+    features: property?.features || [],
+    images: property?.images || [],
   });
+
+  const [newFeature, setNewFeature] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -591,8 +683,8 @@ const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
         district: 'Kebayoran Baru',
         address: 'Jl. Contoh No. 123',
       },
-      images: property?.images || ['https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg'],
-      features: property?.features || ['Carport', 'Taman'],
+      images: formData.images.length > 0 ? formData.images : ['https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg'],
+      features: formData.features,
       agent: property?.agent || {
         id: 'a1',
         name: 'Admin',
@@ -608,6 +700,45 @@ const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
     };
     
     onSave(newProperty);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const imageUrl = event.target?.result as string;
+        setFormData(prev => ({
+          ...prev,
+          images: [...prev.images, imageUrl]
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeImage = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
+  };
+
+  const addFeature = () => {
+    if (newFeature.trim() && !formData.features.includes(newFeature.trim())) {
+      setFormData(prev => ({
+        ...prev,
+        features: [...prev.features, newFeature.trim()]
+      }));
+      setNewFeature('');
+    }
+  };
+
+  const removeFeature = (feature: string) => {
+    setFormData(prev => ({
+      ...prev,
+      features: prev.features.filter(f => f !== feature)
+    }));
   };
 
   return (
@@ -648,6 +779,7 @@ const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
               </label>
               <input
                 type="number"
+                step="0.1"
                 className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                 value={formData.price}
                 onChange={(e) => setFormData(prev => ({ ...prev, price: Number(e.target.value) }))}
@@ -762,6 +894,88 @@ const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 required
               />
+            </div>
+
+            {/* Features */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
+                Fasilitas & Fitur
+              </label>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  value={newFeature}
+                  onChange={(e) => setNewFeature(e.target.value)}
+                  placeholder="Tambah fasilitas (contoh: Carport, Taman, Security 24 Jam)"
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addFeature())}
+                />
+                <button
+                  type="button"
+                  onClick={addFeature}
+                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+                >
+                  Tambah
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {formData.features.map((feature, index) => (
+                  <span
+                    key={index}
+                    className="inline-flex items-center px-3 py-1 bg-neutral-100 text-neutral-700 rounded-full text-sm"
+                  >
+                    {feature}
+                    <button
+                      type="button"
+                      onClick={() => removeFeature(feature)}
+                      className="ml-2 text-neutral-500 hover:text-red-500"
+                    >
+                      <XCircle size={14} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Images */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
+                Foto Properti
+              </label>
+              <div className="mb-2">
+                <label className="block w-full">
+                  <div className="border-2 border-dashed border-neutral-300 rounded-lg p-4 text-center hover:border-primary cursor-pointer">
+                    <Plus size={24} className="mx-auto text-neutral-400 mb-2" />
+                    <p className="text-neutral-600">Klik untuk upload foto</p>
+                  </div>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {formData.images.map((image, index) => (
+                  <div key={index} className="relative">
+                    <img
+                      src={image}
+                      alt={`Property ${index + 1}`}
+                      className="w-full h-20 object-cover rounded-lg"
+                      loading="lazy"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                    >
+                      <XCircle size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           

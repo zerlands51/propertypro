@@ -3,36 +3,95 @@ import { Edit, Trash2, Plus, Eye, EyeOff, Home, Building2, Building, Store, Ware
 import { Helmet } from 'react-helmet-async';
 import DataTable, { Column } from '../../components/admin/DataTable';
 import { Category } from '../../types/admin';
-import { categories as mockCategories } from '../../data/categories';
+import { categoryService } from '../../services/categoryService';
+import { useToast } from '../../contexts/ToastContext';
 
 const CategoryManagement: React.FC = () => {
+  const { showSuccess, showError } = useToast();
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setCategories(mockCategories);
+    fetchCategories();
   }, []);
 
-  const handleStatusToggle = (categoryId: string) => {
-    setCategories(prev => 
-      prev.map(category => 
-        category.id === categoryId 
-          ? { ...category, isActive: !category.isActive, updatedAt: new Date().toISOString() }
-          : category
-      )
-    );
+  const fetchCategories = async () => {
+    setIsLoading(true);
+    try {
+      const filters: any = {};
+      
+      if (filterStatus === 'active') {
+        filters.isActive = true;
+      } else if (filterStatus === 'inactive') {
+        filters.isActive = false;
+      }
+      
+      const data = await categoryService.getAllCategories(filters);
+      setCategories(data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      showError('Error', 'Failed to load categories. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleDeleteCategory = (category: Category) => {
+  const handleStatusToggle = async (categoryId: string) => {
+    try {
+      const category = categories.find(c => c.id === categoryId);
+      if (!category) return;
+      
+      const newStatus = !category.isActive;
+      const success = await categoryService.toggleCategoryStatus(categoryId, newStatus);
+      
+      if (success) {
+        setCategories(prev => 
+          prev.map(category => 
+            category.id === categoryId 
+              ? { ...category, isActive: newStatus, updatedAt: new Date().toISOString() }
+              : category
+          )
+        );
+        
+        showSuccess(
+          'Status Updated', 
+          `Category "${category.name}" is now ${newStatus ? 'active' : 'inactive'}.`
+        );
+      } else {
+        throw new Error('Failed to update category status');
+      }
+    } catch (error) {
+      console.error('Error toggling category status:', error);
+      showError('Error', 'Failed to update category status. Please try again.');
+    }
+  };
+
+  const handleDeleteCategory = async (category: Category) => {
     if (category.propertyCount > 0) {
-      alert(`Tidak dapat menghapus kategori "${category.name}" karena masih memiliki ${category.propertyCount} properti.`);
+      showError(
+        'Cannot Delete Category', 
+        `Category "${category.name}" still has ${category.propertyCount} properties.`
+      );
       return;
     }
     
-    if (confirm(`Apakah Anda yakin ingin menghapus kategori "${category.name}"?`)) {
-      setCategories(prev => prev.filter(c => c.id !== category.id));
+    if (confirm(`Are you sure you want to delete category "${category.name}"?`)) {
+      try {
+        const success = await categoryService.deleteCategory(category.id);
+        
+        if (success) {
+          setCategories(prev => prev.filter(c => c.id !== category.id));
+          showSuccess('Category Deleted', `Category "${category.name}" has been deleted successfully.`);
+        } else {
+          throw new Error('Failed to delete category');
+        }
+      } catch (error) {
+        console.error('Error deleting category:', error);
+        showError('Error', 'Failed to delete category. Please try again.');
+      }
     }
   };
 
@@ -167,7 +226,7 @@ const CategoryManagement: React.FC = () => {
         title="Hapus"
         disabled={category.propertyCount > 0}
       >
-        <Trash2 size={16} />
+        <Trash2 size={16} className={category.propertyCount > 0 ? 'opacity-50 cursor-not-allowed' : ''} />
       </button>
     </div>
   );
@@ -253,6 +312,7 @@ const CategoryManagement: React.FC = () => {
         searchable
         pagination
         pageSize={10}
+        loading={isLoading}
         onRowClick={(category) => handleEditCategory(category)}
       />
 
@@ -261,15 +321,38 @@ const CategoryManagement: React.FC = () => {
         <CategoryFormModal
           category={selectedCategory}
           onClose={() => setShowCategoryModal(false)}
-          onSave={(category) => {
-            if (selectedCategory) {
-              setCategories(prev => 
-                prev.map(c => c.id === category.id ? category : c)
-              );
-            } else {
-              setCategories(prev => [...prev, category]);
+          onSave={async (category) => {
+            try {
+              if (selectedCategory) {
+                // Update existing category
+                const updatedCategory = await categoryService.updateCategory(category.id, category);
+                
+                if (updatedCategory) {
+                  setCategories(prev => 
+                    prev.map(c => c.id === category.id ? updatedCategory : c)
+                  );
+                  
+                  showSuccess('Category Updated', `Category "${category.name}" has been updated successfully.`);
+                } else {
+                  throw new Error('Failed to update category');
+                }
+              } else {
+                // Create new category
+                const newCategory = await categoryService.createCategory(category);
+                
+                if (newCategory) {
+                  setCategories(prev => [...prev, newCategory]);
+                  showSuccess('Category Created', `Category "${category.name}" has been created successfully.`);
+                } else {
+                  throw new Error('Failed to create category');
+                }
+              }
+              
+              setShowCategoryModal(false);
+            } catch (error) {
+              console.error('Error saving category:', error);
+              showError('Error', 'Failed to save category. Please try again.');
             }
-            setShowCategoryModal(false);
           }}
         />
       )}

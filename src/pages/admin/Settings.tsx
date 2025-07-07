@@ -23,19 +23,23 @@ import {
 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { SystemSettings, AdminUser, ActivityLog } from '../../types/admin';
-import { mockSystemSettings, mockAdminUsers, mockActivityLogs } from '../../data/settings';
+import { settingsService } from '../../services/settingsService';
+import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import DataTable, { Column } from '../../components/admin/DataTable';
 
 const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('general');
-  const [settings, setSettings] = useState<SystemSettings>(mockSystemSettings);
-  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(mockAdminUsers);
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(mockActivityLogs);
-  const [isLoading, setIsLoading] = useState(false);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showPasswords, setShowPasswords] = useState<{ [key: string]: boolean }>({});
   const [showUserModal, setShowUserModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const { user } = useAuth();
+  const { showSuccess, showError } = useToast();
 
   const tabs = [
     { id: 'general', label: 'Umum', icon: SettingsIcon },
@@ -50,38 +54,164 @@ const Settings: React.FC = () => {
     { id: 'logs', label: 'Activity Logs', icon: Activity },
   ];
 
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      // Load system settings
+      const systemSettings = await settingsService.getSystemSettings();
+      if (systemSettings) {
+        setSettings(systemSettings);
+      } else {
+        // Use default settings if none exist
+        setSettings(getDefaultSettings());
+      }
+
+      // Load admin users
+      const admins = await settingsService.getAdminUsers();
+      setAdminUsers(admins);
+
+      // Load activity logs
+      const { data: logs } = await settingsService.getActivityLogs({}, 1, 50);
+      setActivityLogs(logs);
+    } catch (error) {
+      console.error('Error loading settings data:', error);
+      showError('Error', 'Failed to load settings data. Please try again.');
+      // Set default settings as fallback
+      setSettings(getDefaultSettings());
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getDefaultSettings = (): SystemSettings => {
+    return {
+      general: {
+        siteName: 'Properti Pro',
+        siteDescription: 'Platform jual beli dan sewa properti terpercaya di Indonesia',
+        siteUrl: 'https://propertipro.id',
+        adminEmail: 'admin@propertipro.id',
+        supportEmail: 'support@propertipro.id',
+        timezone: 'Asia/Jakarta',
+        language: 'id',
+        currency: 'IDR',
+        dateFormat: 'DD/MM/YYYY',
+        timeFormat: '24h',
+      },
+      features: {
+        userRegistration: true,
+        emailVerification: true,
+        propertyApproval: true,
+        autoPublish: false,
+        guestInquiries: true,
+        socialLogin: true,
+        multiLanguage: false,
+        darkMode: true,
+        maintenance: false,
+      },
+      limits: {
+        maxPropertiesPerUser: 50,
+        maxImagesPerProperty: 20,
+        maxFileSize: 10,
+        sessionTimeout: 120,
+        maxLoginAttempts: 5,
+        passwordMinLength: 8,
+        propertyTitleMaxLength: 200,
+        propertyDescriptionMaxLength: 2000,
+      },
+      email: {
+        provider: 'smtp',
+        smtpHost: 'smtp.gmail.com',
+        smtpPort: 587,
+        smtpUsername: 'noreply@propertipro.id',
+        fromEmail: 'noreply@propertipro.id',
+        fromName: 'Properti Pro',
+        replyToEmail: 'support@propertipro.id',
+        enableNotifications: true,
+        enableWelcomeEmail: true,
+        enablePropertyAlerts: true,
+      },
+      security: {
+        enableTwoFactor: false,
+        enableCaptcha: true,
+        captchaProvider: 'recaptcha',
+        enableRateLimit: true,
+        rateLimitRequests: 100,
+        rateLimitWindow: 15,
+        enableIpBlocking: false,
+        blockedIps: [],
+        enableSsl: true,
+        enableHsts: true,
+      },
+      storage: {
+        provider: 'local',
+        maxStorageSize: 100,
+        enableImageOptimization: true,
+        enableImageWatermark: false,
+      },
+      seo: {
+        enableSitemap: true,
+        enableRobotsTxt: true,
+        metaTitle: 'Properti Pro - Jual Beli & Sewa Properti di Indonesia',
+        metaDescription: 'Platform jual beli dan sewa properti terpercaya di Indonesia dengan ribuan pilihan properti berkualitas.',
+        metaKeywords: 'properti, rumah, apartemen, jual beli properti, sewa properti, indonesia',
+        ogImage: '/og-image.jpg',
+        enableStructuredData: true,
+      },
+      social: {
+        enableSocialSharing: true,
+        enableSocialLogin: true,
+      },
+      notifications: {
+        enableEmailNotifications: true,
+        enableSmsNotifications: false,
+        enablePushNotifications: false,
+        smsProvider: 'twilio',
+        pushProvider: 'firebase',
+      },
+      backup: {
+        enableAutoBackup: true,
+        backupFrequency: 'daily',
+        backupRetention: 30,
+        backupLocation: 'local',
+        enableDatabaseBackup: true,
+        enableFileBackup: true,
+        lastBackupDate: new Date().toISOString(),
+        nextBackupDate: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString(),
+      },
+    };
+  };
+
   const handleSaveSettings = async () => {
+    if (!settings || !user) return;
+    
     setIsSaving(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const success = await settingsService.updateSystemSettings(
+        settings,
+        user.id,
+        user.full_name
+      );
       
-      // Add activity log
-      const newLog: ActivityLog = {
-        id: `log${Date.now()}`,
-        userId: 'current-admin-id',
-        userName: 'Current Admin',
-        action: 'UPDATE_SETTINGS',
-        resource: 'system_settings',
-        details: `Updated ${activeTab} settings`,
-        ipAddress: '192.168.1.100',
-        userAgent: navigator.userAgent,
-        createdAt: new Date().toISOString(),
-      };
-      
-      setActivityLogs(prev => [newLog, ...prev]);
-      
-      alert('Pengaturan berhasil disimpan!');
+      if (success) {
+        showSuccess('Settings Saved', 'Your settings have been successfully updated.');
+      } else {
+        throw new Error('Failed to save settings');
+      }
     } catch (error) {
-      alert('Gagal menyimpan pengaturan. Silakan coba lagi.');
+      console.error('Error saving settings:', error);
+      showError('Error', 'Failed to save settings. Please try again.');
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleResetSettings = () => {
-    if (confirm('Apakah Anda yakin ingin mereset pengaturan ke default?')) {
-      setSettings(mockSystemSettings);
+    if (confirm('Are you sure you want to reset settings to default?')) {
+      setSettings(getDefaultSettings());
     }
   };
 
@@ -95,36 +225,22 @@ const Settings: React.FC = () => {
   const handleCreateBackup = async () => {
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const success = await settingsService.createBackup();
       
-      const updatedSettings = {
-        ...settings,
-        backup: {
-          ...settings.backup,
-          lastBackupDate: new Date().toISOString(),
+      if (success) {
+        // Refresh settings to get updated backup dates
+        const updatedSettings = await settingsService.getSystemSettings();
+        if (updatedSettings) {
+          setSettings(updatedSettings);
         }
-      };
-      
-      setSettings(updatedSettings);
-      
-      // Add activity log
-      const newLog: ActivityLog = {
-        id: `log${Date.now()}`,
-        userId: 'current-admin-id',
-        userName: 'Current Admin',
-        action: 'CREATE_BACKUP',
-        resource: 'system_backup',
-        details: 'Manual backup created successfully',
-        ipAddress: '192.168.1.100',
-        userAgent: navigator.userAgent,
-        createdAt: new Date().toISOString(),
-      };
-      
-      setActivityLogs(prev => [newLog, ...prev]);
-      
-      alert('Backup berhasil dibuat!');
+        
+        showSuccess('Backup Created', 'Database backup has been created successfully.');
+      } else {
+        throw new Error('Failed to create backup');
+      }
     } catch (error) {
-      alert('Gagal membuat backup. Silakan coba lagi.');
+      console.error('Error creating backup:', error);
+      showError('Error', 'Failed to create backup. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -140,25 +256,33 @@ const Settings: React.FC = () => {
     setShowUserModal(true);
   };
 
-  const handleDeleteAdmin = (user: AdminUser) => {
-    if (confirm(`Apakah Anda yakin ingin menghapus admin "${user.name}"?`)) {
-      setAdminUsers(prev => prev.filter(u => u.id !== user.id));
-      
-      // Add activity log
-      const newLog: ActivityLog = {
-        id: `log${Date.now()}`,
-        userId: 'current-admin-id',
-        userName: 'Current Admin',
-        action: 'DELETE_USER',
-        resource: 'admin_users',
-        resourceId: user.id,
-        details: `Deleted admin user: ${user.name}`,
-        ipAddress: '192.168.1.100',
-        userAgent: navigator.userAgent,
-        createdAt: new Date().toISOString(),
-      };
-      
-      setActivityLogs(prev => [newLog, ...prev]);
+  const handleDeleteAdmin = async (user: AdminUser) => {
+    if (confirm(`Are you sure you want to delete admin "${user.name}"?`)) {
+      try {
+        const success = await settingsService.deleteAdminUser(user.id);
+        
+        if (success) {
+          setAdminUsers(prev => prev.filter(u => u.id !== user.id));
+          showSuccess('Admin Deleted', `Admin user "${user.name}" has been deleted successfully.`);
+          
+          // Log the activity
+          if (user) {
+            await settingsService.logActivity({
+              userId: user.id,
+              userName: user.name,
+              action: 'DELETE_USER',
+              resource: 'admin_users',
+              resourceId: user.id,
+              details: `Deleted admin user: ${user.name}`,
+            });
+          }
+        } else {
+          throw new Error('Failed to delete admin user');
+        }
+      } catch (error) {
+        console.error('Error deleting admin user:', error);
+        showError('Error', 'Failed to delete admin user. Please try again.');
+      }
     }
   };
 
@@ -305,6 +429,14 @@ const Settings: React.FC = () => {
   ];
 
   const renderTabContent = () => {
+    if (isLoading || !settings) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'general':
         return (
@@ -319,8 +451,8 @@ const Settings: React.FC = () => {
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={settings.general.siteName}
                   onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    general: { ...prev.general, siteName: e.target.value }
+                    ...prev!,
+                    general: { ...prev!.general, siteName: e.target.value }
                   }))}
                 />
               </div>
@@ -334,8 +466,8 @@ const Settings: React.FC = () => {
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={settings.general.siteUrl}
                   onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    general: { ...prev.general, siteUrl: e.target.value }
+                    ...prev!,
+                    general: { ...prev!.general, siteUrl: e.target.value }
                   }))}
                 />
               </div>
@@ -349,8 +481,8 @@ const Settings: React.FC = () => {
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={settings.general.siteDescription}
                   onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    general: { ...prev.general, siteDescription: e.target.value }
+                    ...prev!,
+                    general: { ...prev!.general, siteDescription: e.target.value }
                   }))}
                 />
               </div>
@@ -364,8 +496,8 @@ const Settings: React.FC = () => {
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={settings.general.adminEmail}
                   onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    general: { ...prev.general, adminEmail: e.target.value }
+                    ...prev!,
+                    general: { ...prev!.general, adminEmail: e.target.value }
                   }))}
                 />
               </div>
@@ -379,8 +511,8 @@ const Settings: React.FC = () => {
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={settings.general.supportEmail}
                   onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    general: { ...prev.general, supportEmail: e.target.value }
+                    ...prev!,
+                    general: { ...prev!.general, supportEmail: e.target.value }
                   }))}
                 />
               </div>
@@ -393,8 +525,8 @@ const Settings: React.FC = () => {
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={settings.general.timezone}
                   onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    general: { ...prev.general, timezone: e.target.value }
+                    ...prev!,
+                    general: { ...prev!.general, timezone: e.target.value }
                   }))}
                 >
                   <option value="Asia/Jakarta">Asia/Jakarta (WIB)</option>
@@ -411,8 +543,8 @@ const Settings: React.FC = () => {
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={settings.general.currency}
                   onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    general: { ...prev.general, currency: e.target.value }
+                    ...prev!,
+                    general: { ...prev!.general, currency: e.target.value }
                   }))}
                 >
                   <option value="IDR">Indonesian Rupiah (IDR)</option>
@@ -459,8 +591,8 @@ const Settings: React.FC = () => {
                       className="sr-only peer"
                       checked={value}
                       onChange={(e) => setSettings(prev => ({
-                        ...prev,
-                        features: { ...prev.features, [key]: e.target.checked }
+                        ...prev!,
+                        features: { ...prev!.features, [key]: e.target.checked }
                       }))}
                     />
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
@@ -486,8 +618,8 @@ const Settings: React.FC = () => {
                     className="sr-only peer"
                     checked={settings.security.enableTwoFactor}
                     onChange={(e) => setSettings(prev => ({
-                      ...prev,
-                      security: { ...prev.security, enableTwoFactor: e.target.checked }
+                      ...prev!,
+                      security: { ...prev!.security, enableTwoFactor: e.target.checked }
                     }))}
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
@@ -505,8 +637,8 @@ const Settings: React.FC = () => {
                     className="sr-only peer"
                     checked={settings.security.enableCaptcha}
                     onChange={(e) => setSettings(prev => ({
-                      ...prev,
-                      security: { ...prev.security, enableCaptcha: e.target.checked }
+                      ...prev!,
+                      security: { ...prev!.security, enableCaptcha: e.target.checked }
                     }))}
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
@@ -523,8 +655,8 @@ const Settings: React.FC = () => {
                       className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                       value={settings.security.captchaProvider}
                       onChange={(e) => setSettings(prev => ({
-                        ...prev,
-                        security: { ...prev.security, captchaProvider: e.target.value as 'recaptcha' | 'hcaptcha' }
+                        ...prev!,
+                        security: { ...prev!.security, captchaProvider: e.target.value as 'recaptcha' | 'hcaptcha' }
                       }))}
                     >
                       <option value="recaptcha">Google reCAPTCHA</option>
@@ -541,8 +673,8 @@ const Settings: React.FC = () => {
                       className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                       value={settings.security.captchaSiteKey || ''}
                       onChange={(e) => setSettings(prev => ({
-                        ...prev,
-                        security: { ...prev.security, captchaSiteKey: e.target.value }
+                        ...prev!,
+                        security: { ...prev!.security, captchaSiteKey: e.target.value }
                       }))}
                       placeholder="Site key dari provider CAPTCHA"
                     />
@@ -558,8 +690,8 @@ const Settings: React.FC = () => {
                         className="w-full px-3 py-2 pr-10 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                         value={settings.security.captchaSecretKey || ''}
                         onChange={(e) => setSettings(prev => ({
-                          ...prev,
-                          security: { ...prev.security, captchaSecretKey: e.target.value }
+                          ...prev!,
+                          security: { ...prev!.security, captchaSecretKey: e.target.value }
                         }))}
                         placeholder="Secret key dari provider CAPTCHA"
                       />
@@ -584,8 +716,8 @@ const Settings: React.FC = () => {
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={settings.security.rateLimitRequests}
                   onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    security: { ...prev.security, rateLimitRequests: parseInt(e.target.value) }
+                    ...prev!,
+                    security: { ...prev!.security, rateLimitRequests: parseInt(e.target.value) }
                   }))}
                 />
               </div>
@@ -599,8 +731,8 @@ const Settings: React.FC = () => {
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={settings.security.rateLimitWindow}
                   onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    security: { ...prev.security, rateLimitWindow: parseInt(e.target.value) }
+                    ...prev!,
+                    security: { ...prev!.security, rateLimitWindow: parseInt(e.target.value) }
                   }))}
                 />
               </div>
@@ -620,8 +752,8 @@ const Settings: React.FC = () => {
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={settings.email.provider}
                   onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    email: { ...prev.email, provider: e.target.value as any }
+                    ...prev!,
+                    email: { ...prev!.email, provider: e.target.value as any }
                   }))}
                 >
                   <option value="smtp">SMTP</option>
@@ -642,8 +774,8 @@ const Settings: React.FC = () => {
                       className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                       value={settings.email.smtpHost || ''}
                       onChange={(e) => setSettings(prev => ({
-                        ...prev,
-                        email: { ...prev.email, smtpHost: e.target.value }
+                        ...prev!,
+                        email: { ...prev!.email, smtpHost: e.target.value }
                       }))}
                     />
                   </div>
@@ -657,8 +789,8 @@ const Settings: React.FC = () => {
                       className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                       value={settings.email.smtpPort || ''}
                       onChange={(e) => setSettings(prev => ({
-                        ...prev,
-                        email: { ...prev.email, smtpPort: parseInt(e.target.value) }
+                        ...prev!,
+                        email: { ...prev!.email, smtpPort: parseInt(e.target.value) }
                       }))}
                     />
                   </div>
@@ -672,8 +804,8 @@ const Settings: React.FC = () => {
                       className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                       value={settings.email.smtpUsername || ''}
                       onChange={(e) => setSettings(prev => ({
-                        ...prev,
-                        email: { ...prev.email, smtpUsername: e.target.value }
+                        ...prev!,
+                        email: { ...prev!.email, smtpUsername: e.target.value }
                       }))}
                     />
                   </div>
@@ -688,8 +820,8 @@ const Settings: React.FC = () => {
                         className="w-full px-3 py-2 pr-10 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                         value={settings.email.smtpPassword || ''}
                         onChange={(e) => setSettings(prev => ({
-                          ...prev,
-                          email: { ...prev.email, smtpPassword: e.target.value }
+                          ...prev!,
+                          email: { ...prev!.email, smtpPassword: e.target.value }
                         }))}
                       />
                       <button
@@ -713,8 +845,8 @@ const Settings: React.FC = () => {
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={settings.email.fromEmail}
                   onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    email: { ...prev.email, fromEmail: e.target.value }
+                    ...prev!,
+                    email: { ...prev!.email, fromEmail: e.target.value }
                   }))}
                 />
               </div>
@@ -728,8 +860,8 @@ const Settings: React.FC = () => {
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={settings.email.fromName}
                   onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    email: { ...prev.email, fromName: e.target.value }
+                    ...prev!,
+                    email: { ...prev!.email, fromName: e.target.value }
                   }))}
                 />
               </div>
@@ -758,8 +890,8 @@ const Settings: React.FC = () => {
                         className="sr-only peer"
                         checked={settings.email[key as keyof typeof settings.email] as boolean}
                         onChange={(e) => setSettings(prev => ({
-                          ...prev,
-                          email: { ...prev.email, [key]: e.target.checked }
+                          ...prev!,
+                          email: { ...prev!.email, [key]: e.target.checked }
                         }))}
                       />
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
@@ -835,8 +967,8 @@ const Settings: React.FC = () => {
                     className="sr-only peer"
                     checked={settings.backup.enableAutoBackup}
                     onChange={(e) => setSettings(prev => ({
-                      ...prev,
-                      backup: { ...prev.backup, enableAutoBackup: e.target.checked }
+                      ...prev!,
+                      backup: { ...prev!.backup, enableAutoBackup: e.target.checked }
                     }))}
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
@@ -851,8 +983,8 @@ const Settings: React.FC = () => {
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={settings.backup.backupFrequency}
                   onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    backup: { ...prev.backup, backupFrequency: e.target.value as any }
+                    ...prev!,
+                    backup: { ...prev!.backup, backupFrequency: e.target.value as any }
                   }))}
                   disabled={!settings.backup.enableAutoBackup}
                 >
@@ -871,8 +1003,8 @@ const Settings: React.FC = () => {
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={settings.backup.backupRetention}
                   onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    backup: { ...prev.backup, backupRetention: parseInt(e.target.value) }
+                    ...prev!,
+                    backup: { ...prev!.backup, backupRetention: parseInt(e.target.value) }
                   }))}
                 />
               </div>
@@ -885,8 +1017,8 @@ const Settings: React.FC = () => {
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={settings.backup.backupLocation}
                   onChange={(e) => setSettings(prev => ({
-                    ...prev,
-                    backup: { ...prev.backup, backupLocation: e.target.value as any }
+                    ...prev!,
+                    backup: { ...prev!.backup, backupLocation: e.target.value as any }
                   }))}
                 >
                   <option value="local">Local Storage</option>
@@ -974,7 +1106,7 @@ const Settings: React.FC = () => {
             
             <button
               onClick={handleSaveSettings}
-              disabled={isSaving}
+              disabled={isSaving || isLoading}
               className="btn-primary flex items-center"
             >
               {isSaving ? (
@@ -1027,31 +1159,75 @@ const Settings: React.FC = () => {
         <AdminUserModal
           user={selectedUser}
           onClose={() => setShowUserModal(false)}
-          onSave={(user) => {
-            if (selectedUser) {
-              setAdminUsers(prev => 
-                prev.map(u => u.id === user.id ? user : u)
-              );
-            } else {
-              setAdminUsers(prev => [...prev, user]);
+          onSave={async (user) => {
+            try {
+              if (selectedUser) {
+                // Update existing user
+                const updatedUser = await settingsService.updateAdminUser(user.id, {
+                  name: user.name,
+                  role: user.role,
+                  permissions: user.permissions,
+                  isActive: user.isActive
+                });
+                
+                if (updatedUser) {
+                  setAdminUsers(prev => 
+                    prev.map(u => u.id === user.id ? updatedUser : u)
+                  );
+                  
+                  showSuccess('Admin Updated', `Admin user "${user.name}" has been updated successfully.`);
+                  
+                  // Log the activity
+                  if (user) {
+                    await settingsService.logActivity({
+                      userId: user.id,
+                      userName: user.name,
+                      action: 'UPDATE_USER',
+                      resource: 'admin_users',
+                      resourceId: user.id,
+                      details: `Updated admin user: ${user.name}`,
+                    });
+                  }
+                } else {
+                  throw new Error('Failed to update admin user');
+                }
+              } else {
+                // Create new user
+                const newUser = await settingsService.createAdminUser({
+                  name: user.name,
+                  email: user.email,
+                  password: 'tempPassword123', // In a real app, you'd generate a random password or require one
+                  role: user.role,
+                  permissions: user.permissions,
+                  isActive: user.isActive
+                });
+                
+                if (newUser) {
+                  setAdminUsers(prev => [...prev, newUser]);
+                  
+                  showSuccess('Admin Created', `Admin user "${user.name}" has been created successfully.`);
+                  
+                  // Log the activity
+                  if (user) {
+                    await settingsService.logActivity({
+                      userId: user.id,
+                      userName: user.name,
+                      action: 'CREATE_USER',
+                      resource: 'admin_users',
+                      resourceId: user.id,
+                      details: `Created new admin user: ${user.name}`,
+                    });
+                  }
+                } else {
+                  throw new Error('Failed to create admin user');
+                }
+              }
+              
+              setShowUserModal(false);
+            } catch (error) {
+              console.error('Error saving admin user:', error);
+              showError('Error', 'Failed to save admin user. Please try again.');
             }
-            setShowUserModal(false);
-            
-            // Add activity log
-            const newLog: ActivityLog = {
-              id: `log${Date.now()}`,
-              userId: 'current-admin-id',
-              userName: 'Current Admin',
-              action: selectedUser ? 'UPDATE_USER' : 'CREATE_USER',
-              resource: 'admin_users',
-              resourceId: user.id,
-              details: `${selectedUser ? 'Updated' : 'Created'} admin user: ${user.name}`,
-              ipAddress: '192.168.1.100',
-              userAgent: navigator.userAgent,
-              createdAt: new Date().toISOString(),
-            };
-            
-            setActivityLogs(prev => [newLog, ...prev]);
           }}
         />
       )}
@@ -1096,6 +1272,7 @@ const AdminUserModal: React.FC<AdminUserModalProps> = ({
       ...formData,
       createdAt: user?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      lastLogin: user?.lastLogin || null,
     };
     
     onSave(newUser);
@@ -1149,6 +1326,7 @@ const AdminUserModal: React.FC<AdminUserModalProps> = ({
                 value={formData.email}
                 onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                 required
+                disabled={!!user} // Can't change email for existing users
               />
             </div>
             

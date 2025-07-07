@@ -6,33 +6,49 @@ import { Helmet } from 'react-helmet-async';
 import { PremiumListing, PaymentData } from '../types/premium';
 import { premiumService } from '../services/premiumService';
 import { format } from 'date-fns';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 
 const PremiumDashboardPage: React.FC = () => {
+  const { user } = useAuth();
+  const { showError } = useToast();
   const [premiumListings, setPremiumListings] = useState<PremiumListing[]>([]);
   const [payments, setPayments] = useState<PaymentData[]>([]);
   const [selectedListing, setSelectedListing] = useState<PremiumListing | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (user) {
+      loadData();
+    }
+  }, [user]);
 
   const loadData = async () => {
+    if (!user) return;
+    
     setIsLoading(true);
     try {
-      // In a real app, get current user ID from auth context
-      const userId = 'current-user-id';
-      const userListings = premiumService.getUserPremiumListings(userId);
-      const userPayments = premiumService.getUserPayments(userId);
-      
+      // Get user's premium listings
+      const userListings = await premiumService.getUserPremiumListings(user.id);
       setPremiumListings(userListings);
+      
+      // Get user's payments
+      const userPayments = await premiumService.getUserPayments(user.id);
       setPayments(userPayments);
       
-      if (userListings.length > 0) {
+      // Set the first active listing as selected
+      const activeListing = userListings.find(l => l.status === 'active');
+      if (activeListing) {
+        setSelectedListing(activeListing);
+      } else if (userListings.length > 0) {
         setSelectedListing(userListings[0]);
       }
+      
+      // Check for expired listings
+      await premiumService.checkExpiredListings();
     } catch (error) {
       console.error('Failed to load premium data:', error);
+      showError('Error', 'Failed to load premium data. Please try again.');
     } finally {
       setIsLoading(false);
     }

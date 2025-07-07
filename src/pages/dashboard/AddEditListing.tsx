@@ -8,33 +8,21 @@ import {
   Crown,
   MapPin,
   Home,
-  DollarSign
+  DollarSign,
+  Bed,
+  Bath,
+  Move,
+  Check,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { provinces, cities, districts } from '../../data/locations';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-
-interface ListingFormData {
-  title: string;
-  description: string;
-  propertyType: 'rumah' | 'apartemen' | 'ruko' | 'tanah';
-  purpose: 'jual' | 'sewa';
-  price: number;
-  priceUnit: 'juta' | 'miliar';
-  bedrooms: number;
-  bathrooms: number;
-  buildingSize: number;
-  landSize: number;
-  province: string;
-  city: string;
-  district: string;
-  address: string;
-  features: string[];
-  images: string[];
-  makePremium: boolean;
-}
+import { ListingFormData } from '../../types/listing';
+import { listingService } from '../../services/listingService';
+import { PROPERTY_FEATURES, getAllPropertyFeatures } from '../../types/listing';
 
 const AddEditListing: React.FC = () => {
   const { id } = useParams();
@@ -47,6 +35,7 @@ const AddEditListing: React.FC = () => {
   const [filteredCities, setFilteredCities] = useState(cities);
   const [filteredDistricts, setFilteredDistricts] = useState(districts);
   const [newFeature, setNewFeature] = useState('');
+  const [showFeatureCategories, setShowFeatureCategories] = useState<Record<string, boolean>>({});
 
   const [formData, setFormData] = useState<ListingFormData>({
     title: '',
@@ -65,7 +54,8 @@ const AddEditListing: React.FC = () => {
     address: '',
     features: [],
     images: [],
-    makePremium: false
+    makePremium: false,
+    floors: 1
   });
 
   useEffect(() => {
@@ -73,68 +63,50 @@ const AddEditListing: React.FC = () => {
       // Load existing listing data
       fetchListing(id);
     }
+    
+    // Initialize feature categories as expanded
+    const initialCategoryState: Record<string, boolean> = {};
+    PROPERTY_FEATURES.forEach(category => {
+      initialCategoryState[category.name] = true;
+    });
+    setShowFeatureCategories(initialCategoryState);
   }, [isEdit, id]);
 
   const fetchListing = async (listingId: string) => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('listings')
-        .select('*')
-        .eq('id', listingId)
-        .single();
-
-      if (error) {
-        throw error;
+      const property = await listingService.getListingById(listingId);
+      
+      if (!property) {
+        throw new Error('Property not found');
       }
 
-      if (data) {
-        // Parse location data
-        const locationParts = data.location.split(', ');
-        const districtName = locationParts[0] || '';
-        const cityName = locationParts[1] || '';
-        const provinceName = locationParts[2] || '';
+      // Find location IDs from names
+      const provinceId = provinces.find(p => p.name === property.location.province)?.id || '';
+      const cityId = cities.find(c => c.name === property.location.city && c.provinceId === provinceId)?.id || '';
+      const districtId = districts.find(d => d.name === property.location.district && d.cityId === cityId)?.id || '';
 
-        // Find IDs from names
-        const provinceId = provinces.find(p => p.name === provinceName)?.id || '';
-        const cityId = cities.find(c => c.name === cityName && c.provinceId === provinceId)?.id || '';
-        const districtId = districts.find(d => d.name === districtName && d.cityId === cityId)?.id || '';
-
-        // Convert property data to form data
-        setFormData({
-          title: data.title,
-          description: data.description,
-          propertyType: data.property_type,
-          purpose: data.status === 'tersedia' ? 'jual' : 'sewa', // Map status to purpose
-          price: parseFloat(data.price),
-          priceUnit: parseFloat(data.price) >= 1000 ? 'miliar' : 'juta',
-          bedrooms: data.bedrooms || 0,
-          bathrooms: data.bathrooms || 0,
-          buildingSize: data.square_meters,
-          landSize: data.land_size || 0,
-          province: provinceId,
-          city: cityId,
-          district: districtId,
-          address: data.address || '',
-          features: data.features || [],
-          images: [], // We'll need to fetch images separately
-          makePremium: false
-        });
-
-        // Fetch property media (images)
-        const { data: mediaData, error: mediaError } = await supabase
-          .from('property_media')
-          .select('*')
-          .eq('listing_id', listingId)
-          .order('is_primary', { ascending: false });
-
-        if (!mediaError && mediaData) {
-          setFormData(prev => ({
-            ...prev,
-            images: mediaData.map(item => item.media_url)
-          }));
-        }
-      }
+      // Convert property data to form data
+      setFormData({
+        title: property.title,
+        description: property.description,
+        propertyType: property.type,
+        purpose: property.purpose,
+        price: property.price,
+        priceUnit: property.priceUnit,
+        bedrooms: property.bedrooms || 0,
+        bathrooms: property.bathrooms || 0,
+        buildingSize: property.buildingSize || 0,
+        landSize: property.landSize || 0,
+        province: provinceId,
+        city: cityId,
+        district: districtId,
+        address: property.location.address,
+        features: property.features,
+        images: property.images,
+        makePremium: false,
+        floors: property.floors || 1
+      });
     } catch (error) {
       console.error('Error fetching listing:', error);
       showError('Error', 'Failed to load property data. Please try again.');
@@ -165,7 +137,7 @@ const AddEditListing: React.FC = () => {
 
   const handleInputChange = (field: keyof ListingFormData, value: any) => {
     // Convert numeric string inputs to numbers
-    if (['price', 'bedrooms', 'bathrooms', 'buildingSize', 'landSize'].includes(field)) {
+    if (['price', 'bedrooms', 'bathrooms', 'buildingSize', 'landSize', 'floors'].includes(field)) {
       const numValue = value === '' ? 0 : parseFloat(value);
       setFormData(prev => ({ ...prev, [field]: numValue }));
     } else {
@@ -211,6 +183,30 @@ const AddEditListing: React.FC = () => {
       features: prev.features.filter(f => f !== feature)
     }));
   };
+  
+  const toggleFeature = (featureId: string) => {
+    setFormData(prev => {
+      const features = [...prev.features];
+      if (features.includes(featureId)) {
+        return {
+          ...prev,
+          features: features.filter(id => id !== featureId)
+        };
+      } else {
+        return {
+          ...prev,
+          features: [...features, featureId]
+        };
+      }
+    });
+  };
+  
+  const toggleFeatureCategory = (categoryName: string) => {
+    setShowFeatureCategories(prev => ({
+      ...prev,
+      [categoryName]: !prev[categoryName]
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -223,86 +219,34 @@ const AddEditListing: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Get location names from IDs
-      const province = provinces.find(p => p.id === formData.province)?.name || '';
-      const city = cities.find(c => c.id === formData.city)?.name || '';
-      const district = districts.find(d => d.id === formData.district)?.name || '';
+      let listingId: string | null;
       
-      // Format location string
-      const location = `${district}, ${city}, ${province}`;
-      
-      // Prepare listing data
-      const listingData = {
-        title: formData.title,
-        description: formData.description,
-        price: formData.price,
-        location: location,
-        property_type: formData.propertyType,
-        status: 'tersedia', // Default status
-        square_meters: formData.buildingSize,
-        bedrooms: formData.bedrooms || null,
-        bathrooms: formData.bathrooms || null,
-        features: formData.features,
-        address: formData.address,
-        land_size: formData.landSize || null,
-        user_id: user.id
-      };
-
-      let listingId = id;
-      
-      if (isEdit) {
+      if (isEdit && id) {
         // Update existing listing
-        const { error } = await supabase
-          .from('listings')
-          .update(listingData)
-          .eq('id', id);
-
-        if (error) throw error;
+        const success = await listingService.updateListing(id, formData, user.id);
+        if (!success) {
+          throw new Error('Failed to update listing');
+        }
+        listingId = id;
+        
+        showSuccess(
+          'Listing Updated', 
+          'Your property listing has been updated successfully.'
+        );
       } else {
-        // Insert new listing
-        const { data, error } = await supabase
-          .from('listings')
-          .insert(listingData)
-          .select('id')
-          .single();
-
-        if (error) throw error;
-        listingId = data.id;
-      }
-
-      // Handle images
-      if (listingId) {
-        // If editing, first delete existing images
-        if (isEdit) {
-          await supabase
-            .from('property_media')
-            .delete()
-            .eq('listing_id', listingId);
+        // Create new listing
+        listingId = await listingService.createListing(formData, user.id);
+        if (!listingId) {
+          throw new Error('Failed to create listing');
         }
         
-        // Insert new images
-        const mediaInserts = formData.images.map((url, index) => ({
-          listing_id: listingId,
-          media_url: url,
-          media_type: 'photo',
-          is_primary: index === 0 // First image is primary
-        }));
-        
-        if (mediaInserts.length > 0) {
-          const { error: mediaError } = await supabase
-            .from('property_media')
-            .insert(mediaInserts);
-            
-          if (mediaError) throw mediaError;
-        }
+        showSuccess(
+          'Listing Created', 
+          'Your property listing has been created successfully and is pending review.'
+        );
       }
-
-      showSuccess(
-        isEdit ? 'Listing Updated' : 'Listing Created',
-        isEdit ? 'Your property listing has been updated successfully.' : 'Your property listing has been created successfully.'
-      );
       
-      if (formData.makePremium) {
+      if (formData.makePremium && listingId) {
         // Redirect to premium upgrade
         navigate(`/premium/upgrade?propertyId=${listingId}`);
       } else {
@@ -385,8 +329,12 @@ const AddEditListing: React.FC = () => {
               >
                 <option value="rumah">Rumah</option>
                 <option value="apartemen">Apartemen</option>
+                <option value="kondominium">Kondominium</option>
                 <option value="ruko">Ruko</option>
+                <option value="gedung_komersial">Gedung Komersial</option>
+                <option value="ruang_industri">Ruang Industri</option>
                 <option value="tanah">Tanah</option>
+                <option value="lainnya">Lainnya</option>
               </select>
             </div>
 
@@ -527,6 +475,20 @@ const AddEditListing: React.FC = () => {
                 min="0"
               />
             </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
+                Jumlah Lantai
+              </label>
+              <input
+                type="number"
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                value={formData.floors || ''}
+                onChange={(e) => handleInputChange('floors', e.target.value)}
+                placeholder="1"
+                min="1"
+              />
+            </div>
           </div>
         </div>
 
@@ -612,7 +574,47 @@ const AddEditListing: React.FC = () => {
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">Fasilitas & Fitur</h2>
           
+          {/* Predefined Features */}
+          <div className="mb-6">
+            <h3 className="font-medium text-neutral-700 mb-3">Pilih Fasilitas</h3>
+            <div className="space-y-4">
+              {PROPERTY_FEATURES.map((category, categoryIndex) => (
+                <div key={categoryIndex} className="border rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    className="flex items-center justify-between w-full p-3 bg-neutral-50 text-left"
+                    onClick={() => toggleFeatureCategory(category.name)}
+                  >
+                    <span className="font-medium">{category.name}</span>
+                    {showFeatureCategories[category.name] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+                  
+                  {showFeatureCategories[category.name] && (
+                    <div className="p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {category.features.map((feature, featureIndex) => (
+                        <div key={featureIndex} className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id={`feature-${feature.id}`}
+                            checked={formData.features.includes(feature.id)}
+                            onChange={() => toggleFeature(feature.id)}
+                            className="h-4 w-4 text-primary border-neutral-300 rounded focus:ring-primary"
+                          />
+                          <label htmlFor={`feature-${feature.id}`} className="ml-2 text-sm text-neutral-700">
+                            {feature.label}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Custom Features */}
           <div className="mb-4">
+            <h3 className="font-medium text-neutral-700 mb-3">Tambah Fasilitas Kustom</h3>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -632,23 +634,31 @@ const AddEditListing: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {formData.features.map((feature, index) => (
-              <span
-                key={index}
-                className="inline-flex items-center px-3 py-1 bg-neutral-100 text-neutral-700 rounded-full text-sm"
-              >
-                {feature}
-                <button
-                  type="button"
-                  onClick={() => removeFeature(feature)}
-                  className="ml-2 text-neutral-500 hover:text-red-500"
-                >
-                  <X size={14} />
-                </button>
-              </span>
-            ))}
-          </div>
+          {/* Selected Custom Features */}
+          {formData.features.filter(f => !getAllPropertyFeatures().some(pf => pf.id === f)).length > 0 && (
+            <div className="mb-4">
+              <h3 className="font-medium text-neutral-700 mb-2">Fasilitas Kustom</h3>
+              <div className="flex flex-wrap gap-2">
+                {formData.features
+                  .filter(f => !getAllPropertyFeatures().some(pf => pf.id === f))
+                  .map((feature, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center px-3 py-1 bg-neutral-100 text-neutral-700 rounded-full text-sm"
+                    >
+                      {feature}
+                      <button
+                        type="button"
+                        onClick={() => removeFeature(feature)}
+                        className="ml-2 text-neutral-500 hover:text-red-500"
+                      >
+                        <X size={14} />
+                      </button>
+                    </span>
+                  ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Images */}
