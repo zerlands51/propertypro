@@ -184,19 +184,7 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property }) => {
           {purpose === 'sewa' && <span className="text-sm font-normal text-neutral-500">/bulan</span>}
         </p>
 
-        {/* Rating (using views as a proxy for popularity) */}
         <div className="flex items-center mb-2">
-          {Array.from({ length: 5 }).map((_, index) => {
-            // Calculate a "rating" based on views (1-5 stars)
-            const rating = Math.min(5, Math.max(3, Math.floor(views / 100) + 3));
-            return (
-              <Star 
-                key={index} 
-                size={14} 
-                className={index < rating ? "text-yellow-500 fill-current" : "text-neutral-300"} 
-              />
-            );
-          })}
           <span className="text-xs text-neutral-500 ml-1">({views} views)</span>
         </div>
 
@@ -208,7 +196,7 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property }) => {
         <div className="flex items-center text-neutral-500 text-sm mb-3">
           <MapPin size={16} className="mr-1 flex-shrink-0" />
           <span className="truncate">
-            {location.district}, {location.city}
+            {location.district ? `${location.district}, ${location.city}` : location.city}
           </span>
         </div>
 
