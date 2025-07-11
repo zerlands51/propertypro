@@ -72,6 +72,11 @@ function App() {
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
 
+              {/* New Email Confirmation Routes */}
+              <Route path="/email-confirmation-success" element={<EmailConfirmationSuccessPage />} />
+              <Route path="/email-confirmation-failure" element={<EmailConfirmationFailurePage />} />
+              <Route path="/verify-email" element={<EmailConfirmationSuccessPage />} /> {/* This route is handled by the Edge Function redirect */}
+
               {/* Premium Routes */}
               <Route path="/premium/upgrade" element={<PremiumUpgradePage />} />
               <Route path="/premium/features" element={<PremiumFeaturesPage />} />
