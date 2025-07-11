@@ -137,8 +137,8 @@ const RegisterPage: React.FC = () => {
       });
 
       showSuccess(
-        authMessages.register.success.title,
-        authMessages.register.success.message
+        authMessages.register.emailConfirmationSent.title, // New message
+        authMessages.register.emailConfirmationSent.message // New message
       );
       
       // Navigate to login page after successful registration
