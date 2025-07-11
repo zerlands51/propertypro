@@ -141,10 +141,8 @@ const RegisterPage: React.FC = () => {
         authMessages.register.emailConfirmationSent.message // New message
       );
       
-      // Navigate to login page after successful registration
-      setTimeout(() => {
-        navigate('/login');
-      }, 2000);
+      // No immediate redirect to login, user needs to verify email first
+      // User will be redirected by the Edge Function after successful verification
     } catch (error) {
       // Error is handled by the useEffect above
       console.error('Registration failed:', error);
