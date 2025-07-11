@@ -25,10 +25,12 @@ const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isAuthenticated) {
+    // If user is authenticated and their status is 'active', redirect to home
+    // If status is 'pending_verification', keep them on a page that tells them to verify
+    if (isAuthenticated && !loading && (user?.status === 'active' || user?.status === 'suspended')) {
       navigate('/', { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, loading, navigate, user]); // Added user to dependency array
 
   useEffect(() => {
     clearError();
