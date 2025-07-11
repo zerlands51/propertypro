@@ -238,6 +238,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // If email confirmation is disabled, the user will be automatically signed in
       if (data.session) {
+        // User is signed in, but their profile status is 'pending_verification'
+        // Now, call the Edge Function to send the confirmation email
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_EDGE_FUNCTIONS_URL}/send-confirmation-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${data.session.access_token}` // Use user's token for auth
+          },
+          body: JSON.stringify({
+            userId: data.user?.id,
+            email: data.user?.email,
+            userName: userData.fullName,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Failed to trigger confirmation email:', errorData);
+          // Optionally, handle this error by deleting the user or marking them for manual review
+          throw new Error(errorData.error || 'Failed to send confirmation email.');
+        }
+        
         handleSessionChange(data.session, userData);
       } else {
         dispatch({ type: 'SET_LOADING', payload: false });
