@@ -259,7 +259,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Optionally, handle this error by deleting the user or marking them for manual review
           throw new Error(errorData.error || 'Failed to send confirmation email.');
         }
-        
+
         handleSessionChange(data.session, userData);
       } else {
         dispatch({ type: 'SET_LOADING', payload: false });
