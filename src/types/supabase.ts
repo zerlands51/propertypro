@@ -46,6 +46,8 @@ export interface Database {
           company?: string | null
           created_at?: string
           updated_at?: string
+          email_confirmation_token?: string | null
+          email_confirmation_sent_at?: string | null
         }
       }
       advertiser_accounts: {
