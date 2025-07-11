@@ -12,6 +12,10 @@ import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 
+// New Email Confirmation Pages
+import EmailConfirmationSuccessPage from './pages/EmailConfirmationSuccessPage';
+import EmailConfirmationFailurePage from './pages/EmailConfirmationFailurePage';
+
 // Premium Pages
 import PremiumUpgradePage from './pages/PremiumUpgradePage';
 import PremiumDashboardPage from './pages/PremiumDashboardPage';
