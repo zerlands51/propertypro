@@ -88,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       full_name: userData?.fullName || supabaseUser.user_metadata?.full_name || '',
       phone: userData?.phone || supabaseUser.user_metadata?.phone || null,
       role: (userData?.role || supabaseUser.user_metadata?.role || 'user') as Database['public']['Enums']['user_role'],
-      status: 'active' as Database['public']['Enums']['user_status'],
+      status: 'pending_verification' as Database['public']['Enums']['user_status'], // Set initial status to pending_verification
       avatar_url: null,
       company: null,
       created_at: new Date().toISOString(),
