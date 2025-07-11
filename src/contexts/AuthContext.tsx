@@ -262,6 +262,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         handleSessionChange(data.session, userData);
       } else {
+        // This branch might be hit if Supabase requires email confirmation by default
+        // and doesn't sign in the user immediately.
+        // In our setup, we expect `data.session` to be present if `emailRedirectTo` is used.
         dispatch({ type: 'SET_LOADING', payload: false });
       }
     } catch (error) {
