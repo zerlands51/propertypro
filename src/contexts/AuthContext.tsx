@@ -7,6 +7,8 @@ type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 
 export interface User extends UserProfile {
   email: string;
+  email_confirmation_token?: string | null;
+  email_confirmation_sent_at?: string | null;
 }
 
 interface AuthState {
