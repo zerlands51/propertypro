@@ -226,6 +226,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             phone: userData.phone,
             role: userData.role || 'user',
           },
+          // Disable email confirmation from Supabase Auth to handle it manually
+          // This is crucial for custom email confirmation flow
+          emailRedirectTo: `${window.location.origin}/verify-email`, // This is a fallback, our Edge Function will handle the actual link
         },
       });
 
