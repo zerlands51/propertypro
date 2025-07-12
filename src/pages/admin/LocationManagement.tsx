@@ -634,7 +634,7 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
       return;
     }
     
-   setIsLoadingParents(true);
+    setIsLoadingParents(true);
     try {
       // Fetch parents based on the allowed parent type (assuming only one level up)
       const parents = await locationService.getAllLocations({
