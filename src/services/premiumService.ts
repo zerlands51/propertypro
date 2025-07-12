@@ -285,7 +285,12 @@ class PremiumService {
 
   async getPremiumListing(propertyId: string): Promise<PremiumListing | null> {
     try {
-      console.log(`Attempting to fetch premium_listings for propertyId: ${propertyId}`); // ADD THIS
+      // Check if Supabase client is properly configured
+      if (!supabase || !supabase.supabaseUrl || !supabase.supabaseKey) {
+        console.warn('Supabase client not properly configured');
+        return null;
+      }
+
       const { data, error } = await supabase
         .from('premium_listings')
         .select('*')
@@ -295,7 +300,7 @@ class PremiumService {
         .maybeSingle();
 
       if (error) {
-        console.error('Supabase error fetching premium_listings:', error); // MODIFIED
+        console.error('Supabase error fetching premium_listings:', error);
         if (error.code === 'PGRST116') {
           return null;
         }
@@ -303,26 +308,28 @@ class PremiumService {
       }
 
       if (!data) {
-        console.log('No premium_listing data found for propertyId:', propertyId); // ADD THIS
         return null;
       }
 
-      console.log('Fetched premium_listing data:', data); // ADD THIS
-
       // Get the plan
-      console.log('Attempting to fetch premium plans...'); // ADD THIS
       const plans = await this.getPremiumPlans();
       const plan = plans.find(p => p.id === data.plan_id);
       if (!plan) {
         console.error('Premium plan not found for plan_id:', data.plan_id);
         return null;
       }
-      console.log('Found premium plan:', plan); // ADD THIS
 
       // Transform to PremiumListing interface
       return this.transformDbRecordToPremiumListing(data, plan);
     } catch (error) {
-      console.error('Error in getPremiumListing function:', propertyId, error); // MODIFIED
+      // Handle network errors gracefully
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        console.warn('Network error fetching premium listing - Supabase may be unreachable:', error.message);
+        return null;
+      }
+      
+      // Handle other errors
+      console.error('Error in getPremiumListing function:', propertyId, error);
       return null;
     }
   }

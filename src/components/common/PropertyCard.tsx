@@ -86,7 +86,14 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property }) => {
       const premium = await premiumService.getPremiumListing(property.id);
       setPremiumListing(premium);
     } catch (error) {
-      console.error('Error checking premium status:', error);
+      // Handle network errors gracefully without breaking the UI
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        console.warn('Network error checking premium status - displaying as regular property card');
+      } else {
+        console.error('Error checking premium status:', error);
+      }
+      // Ensure premium listing is set to null so regular card is displayed
+      setPremiumListing(null);
     } finally {
       setIsLoading(false);
     }
