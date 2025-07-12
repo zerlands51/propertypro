@@ -1003,14 +1003,16 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
               type="button"
               onClick={onClose}
               className="px-4 py-2 text-neutral-600 hover:text-neutral-800"
+              disabled={isUploadingImage}
             >
               Batal
             </button>
             <button
               type="submit"
               className="btn-primary"
+              disabled={isUploadingImage}
             >
-              {location ? 'Simpan Perubahan' : 'Tambah Lokasi'}
+              {isUploadingImage ? 'Mengunggah...' : (location ? 'Simpan Perubahan' : 'Tambah Lokasi')}
             </button>
           </div>
         </form>
