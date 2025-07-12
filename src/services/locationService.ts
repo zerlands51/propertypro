@@ -167,6 +167,36 @@ class LocationService {
       throw error;
     }
   }
+
+  async createLocation(locationData: Partial<Location>): Promise<Location | null> {
+    try {
+      const { data, error } = await supabase
+        .from('locations')
+        .insert({
+          name: locationData.name,
+          type: locationData.type,
+          parent_id: locationData.parent_id || null,
+          slug: locationData.slug,
+          description: locationData.description || null,
+          is_active: locationData.is_active !== undefined ? locationData.is_active : true,
+          property_count: 0,
+          latitude: locationData.latitude || null,
+          longitude: locationData.longitude || null,
+          image_url: locationData.image_url || null, // Store image URL
+          image_alt_text: locationData.image_alt_text || null, // Store image alt text
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      return data;
+    } catch (error) {
+      console.error('Error creating location:', error);
+      return null;
+    }
 }
 
 export const locationService = new LocationService();
