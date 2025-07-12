@@ -599,10 +599,12 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
     image_url: location?.image_url || '', // Initialize with existing image URL
     image_alt_text: location?.image_alt_text || '', // Initialize with existing alt text
   });
+
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string>(formData.image_url);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+
   const [availableParents, setAvailableParents] = useState<Location[]>([]);
   const [isLoadingParents, setIsLoadingParents] = useState(false);
   const { showError } = useToast();
