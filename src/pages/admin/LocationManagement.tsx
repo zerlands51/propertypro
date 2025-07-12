@@ -628,19 +628,19 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
     
     const allowedParentTypes = typeHierarchy[formData.type];
     
-    if (allowedParentTypes.length === 0) {
+    if (!allowedParentTypes || allowedParentTypes.length === 0) {
       setAvailableParents([]);
+      setFormData(prev => ({ ...prev, parentId: '' })); // Clear parentId if no parent type
       return;
     }
     
-    setIsLoadingParents(true);
+   setIsLoadingParents(true);
     try {
-      const filters = {
-        type: allowedParentTypes[0],
+      // Fetch parents based on the allowed parent type (assuming only one level up)
+      const parents = await locationService.getAllLocations({
+        type: allowedParentTypes[0], // Get locations of the allowed parent type
         isActive: true,
-      };
-      
-      const parents = await locationService.getAllLocations(filters);
+      });
       
       // Filter out the current location to prevent circular references
       setAvailableParents(
@@ -694,7 +694,7 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
       setImageUploadError(null); // Clear previous errors
     } else {
       setImageFile(null);
-      setImagePreviewUrl(formData.image_url); // Revert to existing image if input cleared
+      setImagePreviewUrl(formData.image_url || ''); // Revert to existing image if input cleared
       setImageUploadError(null);
     }
   };
