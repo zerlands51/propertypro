@@ -930,6 +930,72 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
                 Lokasi aktif
               </label>
             </div>
+
+            {/* Image Upload Field */}
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
+                Gambar Lokasi
+              </label>
+              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-neutral-300 border-dashed rounded-md">
+                <div className="space-y-1 text-center">
+                  {imagePreviewUrl ? (
+                    <div className="relative w-32 h-32 mx-auto mb-2">
+                      <img src={imagePreviewUrl} alt="Image Preview" className="w-full h-full object-cover rounded-md" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImageFile(null);
+                          setImagePreviewUrl('');
+                          setFormData(prev => ({ ...prev, image_url: '' })); // Clear URL in form data
+                        }}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                        aria-label="Remove image"
+                      >
+                        <XCircle size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <Upload size={32} className="mx-auto text-neutral-400" />
+                  )}
+                  <div className="flex text-sm text-neutral-600">
+                    <label
+                      htmlFor="file-upload"
+                      className="relative cursor-pointer bg-white rounded-md font-medium text-primary hover:text-primary/80 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary"
+                    >
+                      <span>Upload a file</span>
+                      <input
+                        id="file-upload"
+                        name="file-upload"
+                        type="file"
+                        className="sr-only"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        disabled={isUploadingImage}
+                      />
+                    </label>
+                    <p className="pl-1">or drag and drop</p>
+                  </div>
+                  <p className="text-xs text-neutral-500">PNG, JPG, GIF up to 5MB</p>
+                  {imageUploadError && (
+                    <p className="text-red-500 text-xs mt-1">{imageUploadError}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Image Alt Text */}
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
+                Deskripsi Gambar (Alt Text)
+              </label>
+              <input
+                type="text"
+                className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                value={formData.image_alt_text}
+                onChange={(e) => setFormData(prev => ({ ...prev, image_alt_text: e.target.value }))}
+                placeholder="Contoh: Pemandangan kota Jakarta"
+              />
+            </div>
           </div>
           
           <div className="flex justify-end space-x-2 mt-6">
