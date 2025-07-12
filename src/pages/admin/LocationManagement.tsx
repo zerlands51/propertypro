@@ -649,7 +649,7 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
       setIsLoadingParents(false);
     }
   };
-//disini
+
   const generateSlug = (name: string) => {
     return name
       .toLowerCase()
@@ -667,17 +667,120 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate image file types
+      if (!file.type.startsWith('image/')) {
+        setImageUploadError('Invalid file type. Please select an image (PNG, JPG, GIF).');
+        setImageFile(null);
+        setImagePreviewUrl('');
+        return;
+      }
+      // Validate image file size (e.g., 5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        setImageUploadError('File size too large. Maximum 5MB.');
+        setImageFile(null);
+        setImagePreviewUrl('');
+        return;
+      }
+
+      setImageFile(file);
+      setImagePreviewUrl(URL.createObjectURL(file));
+      setImageUploadError(null); // Clear previous errors
+    } else {
+      setImageFile(null);
+      setImagePreviewUrl(formData.image_url); // Revert to existing image if input cleared
+      setImageUploadError(null);
+    }
+  };
+
+  const uploadImage = async (): Promise<string | null> => {
+    // If no new file is selected and there's an existing URL, return it
+    if (!imageFile && formData.image_url) return formData.image_url;
+    // If no new file and no existing URL, return null
+    if (!imageFile && !formData.image_url) return null;
+
+    setIsUploadingImage(true);
+    setImageUploadError(null);
+
+    try {
+      const fileExtension = imageFile!.name.split('.').pop();
+      // Ensure slug is available for folder structure, fallback to a generic name
+      const folderName = formData.slug || 'untitled-location';
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${fileExtension}`;
+      const filePath = `${folderName}/${fileName}`; // Organize by location slug
+
+      const { data, error } = await supabase.storage
+        .from('location-images') // Use your bucket name
+        .upload(filePath, imageFile!, {
+          cacheControl: '3600', // Cache for 1 hour
+          upsert: false, // Do not overwrite if file exists (unique naming prevents this)
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('location-images')
+        .getPublicUrl(data.path);
+
+      return publicUrlData.publicUrl;
+    } catch (error: any) {
+      console.error('Error uploading image:', error);
+      setImageUploadError(`Failed to upload image: ${error.message}`);
+      return null;
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    // Basic validation for required fields
+    if (!formData.name || !formData.slug || !formData.type) {
+      showError('Validation Error', 'Please fill in all required fields.');
+      return;
+    }
+    if (formData.type !== 'provinsi' && !formData.parentId) {
+      showError('Validation Error', 'Parent location is required for non-province types.');
+      return;
+    }
+
+    let finalImageUrl: string | null = formData.image_url;
+
+    // Only attempt upload if a new file is selected or existing image is cleared
+    if (imageFile || (formData.image_url && imagePreviewUrl === '')) {
+      finalImageUrl = await uploadImage();
+      if (finalImageUrl === null && imageFile) { // If upload failed for a new file
+        showError('Upload Failed', 'Could not upload image. Please try again.');
+        return;
+      }
+    } else if (!imageFile && imagePreviewUrl === '') {
+        // If user explicitly cleared the image and didn't select a new one
+        finalImageUrl = null;
+    }
+
+
     const newLocation: Location = {
-      id: location?.id || Date.now().toString(),
-      ...formData,
-      propertyCount: location?.propertyCount || 0,
-      createdAt: location?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      id: location?.id || crypto.randomUUID(), // Use crypto.randomUUID() for new IDs
+      name: formData.name,
+      slug: formData.slug,
+      type: formData.type,
+      parent_id: formData.parentId || null,
+      description: formData.description || null,
+      is_active: formData.isActive,
+      property_count: location?.property_count || 0, // Keep existing count
+      latitude: formData.latitude,
+      longitude: formData.longitude,
+      image_url: finalImageUrl, // Store the uploaded URL or null
+      image_alt_text: formData.image_alt_text || formData.name, // Use name as default alt text
+      created_at: location?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
-    
+
     onSave(newLocation);
   };
 
