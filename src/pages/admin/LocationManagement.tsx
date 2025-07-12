@@ -608,7 +608,8 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
   const { showError } = useToast();
 
   useEffect(() => {
-    loadAvailableParents();
+    // Update image preview if formData.image_url changes (e.g., when editing an existing location)
+    setImagePreviewUrl(formData.image_url);
   }, [formData.type]);
 
   const loadAvailableParents = async () => {
