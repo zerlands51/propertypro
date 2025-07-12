@@ -895,7 +895,6 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
                   onChange={(e) => setFormData(prev => ({ 
                     ...prev, 
                     latitude: parseFloat(e.target.value) || 0 
-                    }
                   }))}
                 />
               </div>
