@@ -603,7 +603,6 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string>(formData.image_url);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
-
   const [availableParents, setAvailableParents] = useState<Location[]>([]);
   const [isLoadingParents, setIsLoadingParents] = useState(false);
   const { showError } = useToast();
