@@ -581,24 +581,29 @@ interface LocationFormModalProps {
   onSave: (location: Location) => void;
 }
 
-const LocationFormModal: React.FC<LocationFormModalProps> = ({ 
-  location, 
-  locations,
-  onClose, 
-  onSave 
+const LocationFormModal: React.FC<LocationFormModalProps> = ({
+  location,
+  locations, // Keep this for parent selection
+  onClose,
+  onSave,
 }) => {
   const [formData, setFormData] = useState({
     name: location?.name || '',
     slug: location?.slug || '',
-    type: location?.type || 'province' as const,
+    type: location?.type || ('provinsi' as const), // Ensure type matches DB enum
     parentId: location?.parentId || '',
     description: location?.description || '',
     isActive: location?.isActive ?? true,
-    coordinates: {
-      latitude: location?.coordinates?.latitude || 0,
-      longitude: location?.coordinates?.longitude || 0,
-    },
+    latitude: location?.latitude || 0,
+    longitude: location?.longitude || 0,
+    image_url: location?.image_url || '', // Initialize with existing image URL
+    image_alt_text: location?.image_alt_text || '', // Initialize with existing alt text
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string>(formData.image_url);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+
   const [availableParents, setAvailableParents] = useState<Location[]>([]);
   const [isLoadingParents, setIsLoadingParents] = useState(false);
   const { showError } = useToast();
