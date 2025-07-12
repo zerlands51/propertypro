@@ -3,9 +3,6 @@ import { PremiumListing, PremiumPlan, PaymentData, BillingDetails } from '../typ
 import { format } from 'date-fns';
 
 class PremiumService {
-  /**
-   * Get premium plans configuration
-   */
   async getPremiumPlans(): Promise<PremiumPlan[]> {
     try {
       const { data, error } = await supabase
@@ -286,11 +283,9 @@ class PremiumService {
     }
   }
 
-  /**
-   * Get a premium listing by property ID from Supabase
-   */
   async getPremiumListing(propertyId: string): Promise<PremiumListing | null> {
     try {
+      console.log(`Attempting to fetch premium_listings for propertyId: ${propertyId}`); // ADD THIS
       const { data, error } = await supabase
         .from('premium_listings')
         .select('*')
@@ -300,30 +295,34 @@ class PremiumService {
         .maybeSingle();
 
       if (error) {
-        // If no rows found, return null instead of throwing
+        console.error('Supabase error fetching premium_listings:', error); // MODIFIED
         if (error.code === 'PGRST116') {
           return null;
         }
-        console.error('Supabase error in getPremiumListing:', error);
         throw error;
       }
 
       if (!data) {
+        console.log('No premium_listing data found for propertyId:', propertyId); // ADD THIS
         return null;
       }
 
+      console.log('Fetched premium_listing data:', data); // ADD THIS
+
       // Get the plan
+      console.log('Attempting to fetch premium plans...'); // ADD THIS
       const plans = await this.getPremiumPlans();
       const plan = plans.find(p => p.id === data.plan_id);
       if (!plan) {
         console.error('Premium plan not found for plan_id:', data.plan_id);
         return null;
       }
+      console.log('Found premium plan:', plan); // ADD THIS
 
       // Transform to PremiumListing interface
       return this.transformDbRecordToPremiumListing(data, plan);
     } catch (error) {
-      console.error('Error getting premium listing for propertyId:', propertyId, error);
+      console.error('Error in getPremiumListing function:', propertyId, error); // MODIFIED
       return null;
     }
   }
