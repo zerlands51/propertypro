@@ -838,10 +838,10 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
                   parentId: '' // Reset parent when type changes
                 }))}
               >
-                <option value="province">Provinsi</option>
-                <option value="city">Kota/Kabupaten</option>
-                <option value="district">Kecamatan</option>
-                <option value="subdistrict">Kelurahan/Desa</option>
+                <option value="provinsi">Provinsi</option>
+                <option value="kota">Kota/Kabupaten</option>
+                <option value="kecamatan">Kecamatan</option>
+                <option value="kelurahan">Kelurahan/Desa</option>
               </select>
             </div>
             
