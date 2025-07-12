@@ -583,7 +583,7 @@ interface LocationFormModalProps {
 
 const LocationFormModal: React.FC<LocationFormModalProps> = ({
   location,
-  locations, // Keep this for parent selection
+  locations,
   onClose,
   onSave,
 }) => {
@@ -591,9 +591,9 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
     name: location?.name || '',
     slug: location?.slug || '',
     type: location?.type || ('provinsi' as const), // Ensure type matches DB enum
-    parentId: location?.parentId || '',
+    parentId: location?.parent_id || '', // Use parent_id from existing location
     description: location?.description || '',
-    isActive: location?.isActive ?? true,
+    isActive: location?.is_active ?? true, // Use is_active from existing location
     latitude: location?.latitude || 0,
     longitude: location?.longitude || 0,
     image_url: location?.image_url || '', // Initialize with existing image URL
@@ -601,7 +601,7 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
   });
 
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string>(formData.image_url);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string>(formData.image_url || ''); // Use formData.image_url for initial preview
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
 
@@ -611,8 +611,12 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
 
   useEffect(() => {
     // Update image preview if formData.image_url changes (e.g., when editing an existing location)
-    setImagePreviewUrl(formData.image_url);
+    setImagePreviewUrl(formData.image_url || '');
   }, [formData.image_url]);
+
+  useEffect(() => {
+    loadAvailableParents();
+  }, [formData.type]);
 
   const loadAvailableParents = async () => {
     const typeHierarchy = {
