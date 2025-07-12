@@ -197,6 +197,84 @@ class LocationService {
       console.error('Error creating location:', error);
       return null;
     }
+  }
+
+  async updateLocation(id: string, updates: Partial<Location>): Promise<Location | null> {
+    try {
+      const { data, error } = await supabase
+        .from('locations')
+        .update({
+          name: updates.name,
+          slug: updates.slug,
+          type: updates.type,
+          parent_id: updates.parent_id || null,
+          description: updates.description || null,
+          is_active: updates.is_active,
+          latitude: updates.latitude || null,
+          longitude: updates.longitude || null,
+          image_url: updates.image_url === '' ? null : updates.image_url, // Handle empty string as null
+          image_alt_text: updates.image_alt_text === '' ? null : updates.image_alt_text, // Handle empty string as null
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      return data;
+    } catch (error) {
+      console.error('Error updating location:', error);
+      return null;
+    }
+  }
+
+  async deleteLocation(id: string): Promise<boolean> {
+    try {
+      // Fetch the location to get its image_url before deleting the record
+      const { data: locationToDelete, error: fetchError } = await supabase
+        .from('locations')
+        .select('image_url, slug') // Also fetch slug to construct path
+        .eq('id', id)
+        .single();
+
+      if (fetchError) {
+        // If location not found or other fetch error, proceed with deletion attempt
+        console.warn('Could not fetch location for image deletion:', fetchError);
+      }
+
+      // Attempt to delete the associated image from storage if image_url exists
+      if (locationToDelete?.image_url) {
+        // Extract the path from the public URL. Assumes URL format:
+        // .../storage/v1/object/public/bucket-name/folder/filename.ext
+        const urlParts = locationToDelete.image_url.split('/public/location-images/');
+        if (urlParts.length > 1) {
+          const filePathInBucket = urlParts[1];
+          const { error: deleteStorageError } = await supabase.storage
+            .from('location-images')
+            .remove([filePathInBucket]);
+
+          if (deleteStorageError) {
+            console.warn('Failed to delete image from storage:', deleteStorageError);
+            // Log the warning but don't block the database record deletion
+          }
+        }
+      }
+
+      // Now delete the location record from the database
+      const { error } = await supabase
+        .from('locations')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      return true;
+    } catch (error) {
+      console.error('Error deleting location:', error);
+      return false;
+    }
+  }
 }
 
 export const locationService = new LocationService();
