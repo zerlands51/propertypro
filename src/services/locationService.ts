@@ -13,6 +13,8 @@ export interface Location {
   longitude?: number;
   created_at: string;
   updated_at: string;
+  image_url?: string | null; // Added
+  image_alt_text?: string | null; // Added
 }
 
 class LocationService {
