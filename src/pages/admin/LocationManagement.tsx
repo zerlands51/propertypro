@@ -767,7 +767,6 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
         finalImageUrl = null;
     }
 
-
     const newLocation: Location = {
       id: location?.id || crypto.randomUUID(), // Use crypto.randomUUID() for new IDs
       name: formData.name,
