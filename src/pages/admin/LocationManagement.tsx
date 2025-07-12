@@ -619,14 +619,14 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
   }, [formData.type]);
 
   const loadAvailableParents = async () => {
-    const typeHierarchy = {
-      province: [],
-      city: ['province'],
-      district: ['city'],
-      subdistrict: ['district'],
+    const typeHierarchy: { [key: string]: string[] } = { // Explicitly define typeHierarchy
+      provinsi: [],
+      kota: ['provinsi'],
+      kecamatan: ['kota'],
+      kelurahan: ['kecamatan'],
     };
     
-    const allowedParentTypes = typeHierarchy[formData.type as keyof typeof typeHierarchy];
+    const allowedParentTypes = typeHierarchy[formData.type];
     
     if (allowedParentTypes.length === 0) {
       setAvailableParents([]);
