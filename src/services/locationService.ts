@@ -207,7 +207,7 @@ class LocationService {
           name: updates.name,
           slug: updates.slug,
           type: updates.type,
-          parent_id: updates.parent_id || null,
+          parent_id: updates.parent_id === '' ? null : updates.parent_id, 
           description: updates.description || null,
           is_active: updates.is_active,
           latitude: updates.latitude || null,
