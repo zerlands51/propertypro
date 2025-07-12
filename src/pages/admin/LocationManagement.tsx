@@ -1,5 +1,3 @@
-import { Upload, XCircle } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
 import React, { useState, useEffect } from 'react';
 import { Edit, Trash2, Plus, Eye, EyeOff, ChevronRight, ChevronDown, MapPin } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
@@ -7,6 +5,8 @@ import DataTable, { Column } from '../../components/admin/DataTable';
 import { Location, LocationHierarchy } from '../../types/admin';
 import { locationService } from '../../services/locationService';
 import { useToast } from '../../contexts/ToastContext';
+import { Upload, XCircle } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 const LocationManagement: React.FC = () => {
   const { showSuccess, showError } = useToast();
