@@ -612,7 +612,7 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
   useEffect(() => {
     // Update image preview if formData.image_url changes (e.g., when editing an existing location)
     setImagePreviewUrl(formData.image_url);
-  }, [formData.type]);
+  }, [formData.image_url]);
 
   const loadAvailableParents = async () => {
     const typeHierarchy = {
