@@ -649,7 +649,7 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
       setIsLoadingParents(false);
     }
   };
-
+//disini
   const generateSlug = (name: string) => {
     return name
       .toLowerCase()
