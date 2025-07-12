@@ -908,12 +908,10 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
                   type="number"
                   step="any"
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  value={formData.coordinates.longitude}
+                  value={formData.longitude}
                   onChange={(e) => setFormData(prev => ({ 
                     ...prev, 
-                    coordinates: { 
-                      ...prev.coordinates, 
-                      longitude: parseFloat(e.target.value) || 0 
+                    longitude: parseFloat(e.target.value) || 0 
                     }
                   }))}
                 />
