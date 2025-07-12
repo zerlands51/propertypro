@@ -31,7 +31,7 @@ export interface Location {
   /** Location name */
   name: string;
   /** Location type */
-  type: 'province' | 'city' | 'district' | 'subdistrict';
+  type: 'province' | 'city' | 'district' | 'subdistrict'; // Note: Your DB schema uses 'provinsi', 'kota', 'kecamatan', 'kelurahan'
   /** Parent location ID (optional) */
   parentId?: string;
   /** URL-friendly slug */
@@ -53,6 +53,9 @@ export interface Location {
   createdAt: string;
   /** ISO date string when the location was last updated */
   updatedAt: string;
+  // Ensure these fields are present:
+  image_url?: string | null; // URL of the location image
+  image_alt_text?: string | null; // Alt text for the location image
 }
 
 /**
