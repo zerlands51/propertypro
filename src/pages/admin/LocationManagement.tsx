@@ -845,7 +845,7 @@ const LocationFormModal: React.FC<LocationFormModalProps> = ({
               </select>
             </div>
             
-            {formData.type !== 'province' && (
+            {formData.type !== 'provinsi' && (
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">
                   Parent Lokasi
