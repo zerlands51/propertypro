@@ -18,7 +18,14 @@ class ListingService {
       // Simplified query to avoid timeouts - only fetch basic listing data
       let query = supabase
         .from('listings')
-        .select('*', { count: 'exact' });
+        .select(`
+          *,
+          property_media(media_url, is_primary), // Join property media
+          province:locations!listings_province_id_fkey(name), // Join province name
+          city:locations!listings_city_id_fkey(name),       // Join city name
+          district:locations!listings_district_id_fkey(name), // Join district name
+          agent_profile:user_profiles(full_name, phone, company, avatar_url, email) // Join agent profile
+        `, { count: 'exact' });
 
       // Apply filters
       if (filters) {
@@ -105,6 +112,10 @@ class ListingService {
           if (filters.location.district) {
             query = query.eq('district_id', filters.location.district);
           }
+        }
+
+        if (filters.features && filters.features.length > 0) {
+          query = query.contains('features', filters.features);
         }
       }
       
