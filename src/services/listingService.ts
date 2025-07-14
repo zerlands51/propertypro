@@ -552,14 +552,14 @@ class ListingService {
     }
     
     // Create agent object with minimal data for listing cards
-    const userProfile = dbListing.user_profile || {};
+    const agentProfile = dbListing.agent_profile || {};
     const agent = {
       id: dbListing.user_id,
-      name: userProfile.full_name || 'Agent',
-      phone: userProfile.phone || '',
-      email: '', // Email still not included for privacy
-      avatar: userProfile.avatar_url,
-      company: userProfile.company
+      name: agentProfile.full_name || 'Agent',
+      phone: agentProfile.phone || '',
+      email: agentProfile.email || '', // MODIFIED: Email is now available from joined user_profiles
+      avatar: agentProfile.avatar_url,
+      company: agentProfile.company
     };
     
     // Map property type
