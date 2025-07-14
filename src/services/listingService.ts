@@ -20,11 +20,11 @@ class ListingService {
         .from('listings')
         .select(`
           *,
-          property_media(media_url, is_primary), // Join property media
-          province:locations!listings_province_id_fkey(name), // Join province name
-          city:locations!listings_city_id_fkey(name),       // Join city name
-          district:locations!listings_district_id_fkey(name), // Join district name
-          agent_profile:user_profiles(full_name, phone, company, avatar_url, email) // Join agent profile
+          property_media(media_url, is_primary),
+          province:locations!listings_province_id_fkey(name),
+          city:locations!listings_city_id_fkey(name),
+          district:locations!listings_district_id_fkey(name),
+          agent_profile:user_profiles(full_name,phone,company,avatar_url,email)
         `, { count: 'exact' });
 
       // Apply filters
