@@ -202,10 +202,7 @@ class ListingService {
       if (error) throw error;
       if (!listing) return null;
       
-      // Fetch related data for a single listing
-      const enrichedListing = await this.enrichListingWithRelatedData(listing);
-      
-      return this.mapDbListingToProperty(enrichedListing);
+      return this.mapDbListingToProperty(listing);
     } catch (error) {
       console.error('Error fetching listing:', error);
       return null;
