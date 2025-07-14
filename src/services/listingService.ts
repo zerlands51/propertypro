@@ -169,21 +169,7 @@ class ListingService {
       
       if (error) throw error;
 
-      // Fetch related data in bulk to avoid N+1 query problems
-      const enrichedListings = await this.enrichListingsWithRelatedData(data || []);
-      
-      // Transform data to Property interface
-      let properties: Property[] = this.mapDbListingsToProperties(enrichedListings);
-      
-      // Filter by features if specified (this needs to be done client-side since Supabase doesn't support array contains all)
-      if (filters?.features && filters.features.length > 0) {
-        properties = properties.filter(property => {
-          // Check if property has all the required features
-          return filters.features!.every(feature => 
-            property.features.includes(feature)
-          );
-        });
-      }
+      let properties: Property[] = this.mapDbListingsToProperties(data || []);
       
       return {
         data: properties,
