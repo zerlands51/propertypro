@@ -216,7 +216,12 @@ class ListingService {
     try {
       const { data, error } = await supabase
         .from('listings')
-        .select('*, premium_listings!fk_premium_property(status, end_date)')
+        .select(`
+          *, 
+          premium_listings!fk_premium_property(status, end_date),
+          province:locations!listings_province_id_fkey(name), // Join province name
+          city:locations!listings_city_id_fkey(name)       // Join city name
+        `)
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
       
