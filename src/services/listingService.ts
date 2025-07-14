@@ -23,7 +23,7 @@ class ListingService {
           province:locations!fk_province(name),
           city:locations!fk_city(name),
           district:locations!fk_district(name),
-          agent_profile:user_profiles(full_name,phone,company,avatar_url,email)
+          agent_profile:user_profiles(full_name,phone,company,avatar_url)
         `, { count: 'exact' });
 
       // Apply filters
