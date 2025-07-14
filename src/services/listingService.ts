@@ -227,11 +227,8 @@ class ListingService {
       
       if (error) throw error;
       
-      // Fetch location data for these listings
-      const enrichedListings = await this.enrichListingsWithLocationData(data || []);
-      
       // Transform to UserListing interface
-      const userListings: UserListing[] = enrichedListings.map((listing) => {
+      const userListings: UserListing[] = (data || []).map((listing) => {
         // Get location names
         const province = listing.province?.name || '';
         const city = listing.city?.name || '';
