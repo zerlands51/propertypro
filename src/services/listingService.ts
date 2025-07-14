@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { Listing, PropertyMedia, UserListing, ListingFormData, ListingFilters } from '../types/listing';
-import { Property, PropertyType, ListingStatus, Location } from '../types';
+import { Property, PropertyType, ListingStatus } from '../types';
 import { User } from '../contexts/AuthContext';
 
 /**
