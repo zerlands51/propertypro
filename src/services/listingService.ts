@@ -188,7 +188,14 @@ class ListingService {
     try {
       const { data: listing, error } = await supabase
         .from('listings')
-        .select('*')
+        .select(`
+          *,
+          property_media(media_url, is_primary), // Join property media
+          province:locations!listings_province_id_fkey(name), // Join province name
+          city:locations!listings_city_id_fkey(name),       // Join city name
+          district:locations!listings_district_id_fkey(name), // Join district name
+          agent_profile:user_profiles(full_name, phone, company, avatar_url, email) // Join agent profile
+        `)
         .eq('id', id)
         .single();
       
