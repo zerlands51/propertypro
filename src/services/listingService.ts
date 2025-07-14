@@ -1,5 +1,4 @@
 import { supabase } from '../lib/supabase';
-import { Listing, PropertyMedia, UserListing, ListingFormData, ListingFilters } from '../types/listing';
 import { Property, PropertyType, ListingStatus } from '../types';
 import { User } from '../contexts/AuthContext';
 
@@ -21,9 +20,9 @@ class ListingService {
         .select(`
           *,
           property_media(media_url, is_primary),
-          province:locations!listings_province_id_fkey(name),
-          city:locations!listings_city_id_fkey(name),
-          district:locations!listings_district_id_fkey(name),
+          province:locations!fk_province(name),
+          city:locations!fk_city(name),
+          district:locations!fk_district(name),
           agent_profile:user_profiles(full_name,phone,company,avatar_url,email)
         `, { count: 'exact' });
 
@@ -191,9 +190,9 @@ class ListingService {
         .select(`
           *,
           property_media(media_url, is_primary),
-          province:locations!listings_province_id_fkey(name),
-          city:locations!listings_city_id_fkey(name),
-          district:locations!listings_district_id_fkey(name),
+          province:locations!fk_province(name),
+          city:locations!fk_city(name),
+          district:locations!fk_district(name),
           agent_profile:user_profiles(full_name,phone,company,avatar_url,email)
         `)
         .eq('id', id)
@@ -219,8 +218,8 @@ class ListingService {
         .select(`
           *, 
           premium_listings!fk_premium_property(status, end_date),
-          province:locations!listings_province_id_fkey(name), // Join province name
-          city:locations!listings_city_id_fkey(name)       // Join city name
+          province:locations!fk_province(name),
+          city:locations!fk_city(name)
         `)
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
