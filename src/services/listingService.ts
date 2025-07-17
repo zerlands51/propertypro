@@ -452,6 +452,16 @@ class ListingService {
       if (usersError) throw usersError;
 
       // Create lookup maps for quick access
+      const mediaByListingId = new Map();
+      if (allMedia) {
+        allMedia.forEach(media => {
+          if (!mediaByListingId.has(media.listing_id)) {
+            mediaByListingId.set(media.listing_id, []);
+          }
+          mediaByListingId.get(media.listing_id).push(media);
+        });
+      }
+
       const locationsById = new Map();
       if (allLocations) {
         allLocations.forEach(location => {
@@ -468,6 +478,9 @@ class ListingService {
       
       // Enrich each listing with its related data
       return listings.map(listing => {
+        // Add media
+        const media = mediaByListingId.get(listing.id) || [];
+        
         // Add location names
         const province = locationsById.get(listing.province_id);
         const city = locationsById.get(listing.city_id);
@@ -478,15 +491,16 @@ class ListingService {
         
         return {
           ...listing,
-          province_name: province?.name || '',
-          city_name: city?.name || '',
-          district_name: district?.name || '',
-          user_profile: userProfile
+          _property_media: media, // Store as internal property
+          _province_name: province?.name || '', // Store as internal property
+          _city_name: city?.name || '',
+          _district_name: district?.name || '',
+          _agent_profile: userProfile // Store as internal property
         };
       });
     } catch (error) {
       console.error('Error enriching listings with related data:', error);
-      return listings; // Return original listings if enrichment fails
+      throw error; // Re-throw to be caught by calling function
     }
   }
 
