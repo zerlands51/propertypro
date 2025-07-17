@@ -23,6 +23,7 @@ import { formatPrice } from '../../utils/formatter';
 import { premiumService } from '../../services/premiumService';
 import PremiumPropertyCard from '../premium/PremiumPropertyCard';
 import { getFeatureLabelById } from '../../types/listing';
+import { useToast } from '../../contexts/ToastContext'; // ADD THIS LINE
 
 interface PropertyCardProps {
   property: Property;
@@ -76,21 +77,25 @@ const featureIcons: Record<string, React.ElementType> = {
 const PropertyCard: React.FC<PropertyCardProps> = ({ property }) => {
   const [premiumListing, setPremiumListing] = React.useState<any>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const { showError } = useToast();
 
   React.useEffect(() => {
     checkPremiumStatus();
-  }, []);
+  }, [property.id]);
 
   const checkPremiumStatus = async () => {
+    setIsLoading(true);
     try {
       const premium = await premiumService.getPremiumListing(property.id);
       setPremiumListing(premium);
-    } catch (error) {
+    } catch (error: any) { // MODIFIED: Catch error as 'any'
       // Handle network errors gracefully without breaking the UI
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
         console.warn('Network error checking premium status - displaying as regular property card');
+        showError('Network Error', 'Could not load premium status. Displaying basic property card.'); // ADDED: User feedback
       } else {
         console.error('Error checking premium status:', error);
+        showError('Error', error.message || 'Failed to load premium status.'); // ADDED: User feedback
       }
       // Ensure premium listing is set to null so regular card is displayed
       setPremiumListing(null);
@@ -106,6 +111,15 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property }) => {
   };
 
   // If property has premium listing, use PremiumPropertyCard
+  // MODIFIED: Only render PremiumPropertyCard if not loading and premiumListing is available
+  if (isLoading) {
+    return (
+      <div className="card group flex items-center justify-center h-64">
+        <Loader size={32} className="animate-spin text-primary" /> {/* ADDED: Loader */}
+      </div>
+    );
+  }
+
   if (premiumListing) {
     return (
       <PremiumPropertyCard 
