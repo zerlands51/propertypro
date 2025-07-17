@@ -155,10 +155,8 @@ class ListingService {
       
       if (error) throw error;
 
-      // MODIFIED LINE: Enrich the fetched raw listings data
       const enrichedListings = await this._enrichListingsWithRelatedData(data || []);
       
-      // MODIFIED LINE: Map the already enriched data to Property interface
       let properties: Property[] = this._mapDbListingsToProperties(enrichedListings);
       
       return {
