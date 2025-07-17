@@ -1,26 +1,17 @@
 import { supabase } from '../lib/supabase';
 import { Property, PropertyType, ListingStatus } from '../types';
 import { User } from '../contexts/AuthContext';
+import { ListingFormData, UserListing } from '../types/listing';
 
-/**
- * Service for managing property listings
- */
 class ListingService {
-  /**
-   * Get all listings with optional filtering, sorting, and pagination
-   */
   async getAllListings(filters?: ListingFilters, page: number = 1, pageSize: number = 10): Promise<{
     data: Property[];
     count: number;
   }> {
     try {
-      // Simplified query to avoid timeouts - only fetch basic listing data
       let query = supabase
         .from('listings')
-        .select(`
-          *,
-          property_media(media_url, is_primary)
-        `, { count: 'exact' });
+        .select('*', { count: 'exact' });
 
       // Apply filters
       if (filters) {
