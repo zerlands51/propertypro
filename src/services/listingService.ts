@@ -11,7 +11,14 @@ class ListingService {
     try {
       let query = supabase
         .from('listings')
-        .select('*', { count: 'exact' });
+        .select(`
+          *,
+          property_media(media_url, is_primary),
+          province:locations!listings_province_id_fkey(name),
+          city:locations!listings_city_id_fkey(name),
+          district:locations!listings_district_id_fkey(name),
+          agent_profile:user_profiles(full_name, phone, company, avatar_url) // MODIFIED: Removed 'email'
+        `, { count: 'exact' });
 
       // Apply filters
       if (filters) {
@@ -165,7 +172,7 @@ class ListingService {
       };
     } catch (error) {
       console.error('Error fetching listings:', error);
-      throw error;
+      return { data: [], count: 0 };
     }
   }
 
@@ -176,17 +183,21 @@ class ListingService {
     try {
       const { data: listing, error } = await supabase
         .from('listings')
-        .select('*')
+        .select(`
+          *,
+          property_media(media_url, is_primary),
+          province:locations!listings_province_id_fkey(name),
+          city:locations!listings_city_id_fkey(name),
+          district:locations!listings_district_id_fkey(name),
+          agent_profile:user_profiles(full_name, phone, company, avatar_url) // MODIFIED: Removed 'email'
+        `)
         .eq('id', id)
         .single();
       
       if (error) throw error;
       if (!listing) return null;
       
-      const enrichedListingArray = await this._enrichListingsWithRelatedData([listing]);
-      const enrichedListing = enrichedListingArray[0];
-      
-      return this._mapDbListingToProperty(enrichedListing);
+      return this.mapDbListingToProperty(listing);
     } catch (error) {
       console.error('Error fetching listing:', error);
       throw error;
@@ -651,19 +662,17 @@ class ListingService {
     const city = dbListing._city_name || '';
     const district = dbListing._district_name || '';
     
-    // Get images from enriched data (internal property)
-    let images = ['https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg']; // Default image
-    if (dbListing._property_media && dbListing._property_media.length > 0) {
-      images = dbListing._property_media.map((media: any) => media.media_url);
+    let images = ['https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg'];
+    if (dbListing.property_media && dbListing.property_media.length > 0) {
+      images = dbListing.property_media.map((media: any) => media.media_url);
     }
     
-    // Create agent object from enriched data (internal property)
-    const agentProfile = dbListing._agent_profile || {};
+    const agentProfile = dbListing.agent_profile || {};
     const agent = {
       id: dbListing.user_id,
       name: agentProfile.full_name || 'Agent',
       phone: agentProfile.phone || '',
-      email: agentProfile.email || '',
+      email: '', 
       avatar: agentProfile.avatar_url,
       company: agentProfile.company
     };
@@ -701,8 +710,8 @@ class ListingService {
     };
   }
 
-  private _mapDbListingsToProperties(dbListings: any[]): Property[] {
-    return dbListings.map(listing => this._mapDbListingToProperty(listing));
+  private mapDbListingsToProperties(dbListings: any[]): Property[] {
+    return dbListings.map(listing => this.mapDbListingToProperty(listing));
   }
 }
 
