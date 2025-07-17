@@ -418,7 +418,7 @@ class ListingService {
    * Enrich listings with related data (locations, user profiles)
    * This avoids complex joins that can cause timeouts
    */
-  private async enrichListingsWithRelatedData(listings: any[]): Promise<any[]> {
+  private async _enrichListingsWithRelatedData(listings: any[]): Promise<any[]> {
     if (!listings.length) return [];
     
     try {
