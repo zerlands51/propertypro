@@ -423,22 +423,26 @@ class ListingService {
     
     try {
       // Extract all unique IDs needed for related data
+      const listingIds = listings.map(listing => listing.id);
       const provinceIds = [...new Set(listings.map(listing => listing.province_id).filter(Boolean))];
       const cityIds = [...new Set(listings.map(listing => listing.city_id).filter(Boolean))];
       const districtIds = [...new Set(listings.map(listing => listing.district_id).filter(Boolean))];
       const userIds = [...new Set(listings.map(listing => listing.user_id).filter(Boolean))];
+
       
       // Fetch all locations in one query
-      const { data: allLocations } = await supabase
+      const { data: allMedia, error: mediaError } = await supabase
+        .from('property_media')
+        .select('listing_id, media_url, is_primary')
+        .in('listing_id', listingIds);
+      if (mediaError) throw mediaError;
+      
+      // Fetch all user profiles in one query
+      const { data: allLocations, error: locationsError } = await supabase
         .from('locations')
         .select('id, name, type')
         .in('id', [...provinceIds, ...cityIds, ...districtIds]);
-      
-      // Fetch all user profiles in one query
-      const { data: allUsers } = await supabase
-        .from('user_profiles')
-        .select('id, full_name, phone, company, avatar_url')
-        .in('id', userIds);
+      if (locationsError) throw locationsError;
       
       // Create lookup maps for quick access
       const locationsById = new Map();
