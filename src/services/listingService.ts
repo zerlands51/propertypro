@@ -443,7 +443,14 @@ class ListingService {
         .select('id, name, type')
         .in('id', [...provinceIds, ...cityIds, ...districtIds]);
       if (locationsError) throw locationsError;
-      
+
+      // Fetch all user profiles in one batch
+      const { data: allUsers, error: usersError } = await supabase
+        .from('user_profiles')
+        .select('id, full_name, phone, company, avatar_url, email') // Include email here
+        .in('id', userIds);
+      if (usersError) throw usersError;
+
       // Create lookup maps for quick access
       const locationsById = new Map();
       if (allLocations) {
