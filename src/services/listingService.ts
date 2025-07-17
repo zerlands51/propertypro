@@ -165,7 +165,7 @@ class ListingService {
       };
     } catch (error) {
       console.error('Error fetching listings:', error);
-      throw error; 
+      throw error;
     }
   }
 
@@ -184,12 +184,12 @@ class ListingService {
       if (!listing) return null;
       
       const enrichedListingArray = await this._enrichListingsWithRelatedData([listing]);
-      const enrichedListing = enrichedListingArray[0]; 
+      const enrichedListing = enrichedListingArray[0];
       
       return this._mapDbListingToProperty(enrichedListing);
     } catch (error) {
       console.error('Error fetching listing:', error);
-      throw error; 
+      throw error;
     }
   }
 
@@ -646,32 +646,28 @@ class ListingService {
     };
   }
 
-  /**
-   * Map database listing response to Property interface (single listing)
-   */
-  private mapDbListingToProperty(dbListing: any): Property {
-    const province = dbListing.province_name || '';
-    const city = dbListing.city_name || '';
-    const district = dbListing.district_name || '';
+  private _mapDbListingToProperty(dbListing: any): Property {
+    const province = dbListing._province_name || '';
+    const city = dbListing._city_name || '';
+    const district = dbListing._district_name || '';
     
-    // Get images from property_media
+    // Get images from enriched data (internal property)
     let images = ['https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg']; // Default image
-    if (dbListing.property_media && dbListing.property_media.length > 0) {
-      images = dbListing.property_media.map((media: any) => media.media_url);
+    if (dbListing._property_media && dbListing._property_media.length > 0) {
+      images = dbListing._property_media.map((media: any) => media.media_url);
     }
     
-    // Create agent object with minimal data for listing cards
-    const userProfile = dbListing.user_profile || {};
+    // Create agent object from enriched data (internal property)
+    const agentProfile = dbListing._agent_profile || {};
     const agent = {
       id: dbListing.user_id,
-      name: userProfile.full_name || 'Agent',
-      phone: userProfile.phone || '',
-      email: '', // Email not available in user_profiles
-      avatar: userProfile.avatar_url,
-      company: userProfile.company
+      name: agentProfile.full_name || 'Agent',
+      phone: agentProfile.phone || '',
+      email: agentProfile.email || '',
+      avatar: agentProfile.avatar_url,
+      company: agentProfile.company
     };
     
-    // Map property type
     const propertyType = dbListing.property_type as PropertyType;
     
     return {
@@ -705,11 +701,8 @@ class ListingService {
     };
   }
 
-  /**
-   * Map database listings response to Property interface (multiple listings)
-   */
-  private mapDbListingsToProperties(dbListings: any[]): Property[] {
-    return dbListings.map(listing => this.mapDbListingToProperty(listing));
+  private _mapDbListingsToProperties(dbListings: any[]): Property[] {
+    return dbListings.map(listing => this._mapDbListingToProperty(listing));
   }
 }
 
