@@ -209,8 +209,7 @@ class ListingService {
       
       if (error) throw error;
       
-      // Enrich with location data using separate queries
-      const enrichedListings = await this.enrichListingsWithLocationData(data || []);
+      const enrichedListings = await this._enrichUserListingsWithLocationData(data || []);
       
       // Transform to UserListing interface
       const userListings: UserListing[] = enrichedListings.map((listing) => {
@@ -218,7 +217,7 @@ class ListingService {
         const province = listing.province_name || '';
         const city = listing.city_name || '';
         
-        // Use fallback image
+        // Use fallback image (ideally from property_media, but not fetched here for simplicity)
         const primaryImage = 'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg';
         
         // Map status
@@ -273,10 +272,10 @@ class ListingService {
       return userListings;
     } catch (error) {
       console.error('Error fetching user listings:', error);
-      return [];
+      throw error; // RE-THROW ERROR: Allow calling component to handle it
     }
   }
-
+  
   /**
    * Create a new listing
    */
