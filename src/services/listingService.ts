@@ -155,10 +155,11 @@ class ListingService {
       
       if (error) throw error;
 
-      // Enrich listings with related data using separate batched queries
-      const enrichedListings = await this.enrichListingsWithRelatedData(data || []);
+      // MODIFIED LINE: Enrich the fetched raw listings data
+      const enrichedListings = await this._enrichListingsWithRelatedData(data || []);
       
-      let properties: Property[] = this.mapDbListingsToProperties(enrichedListings);
+      // MODIFIED LINE: Map the already enriched data to Property interface
+      let properties: Property[] = this._mapDbListingsToProperties(enrichedListings);
       
       return {
         data: properties,
@@ -166,7 +167,7 @@ class ListingService {
       };
     } catch (error) {
       console.error('Error fetching listings:', error);
-      return { data: [], count: 0 };
+      throw error; // RE-THROW ERROR: Allow calling component to handle it
     }
   }
 
