@@ -4,10 +4,12 @@ import { ChevronRight } from 'lucide-react';
 import PropertyCard from '../common/PropertyCard';
 import { Property } from '../../types';
 import { listingService } from '../../services/listingService';
+import { useToast } from '../../contexts/ToastContext';
 
 const FeaturedProperties: React.FC = () => {
   const [featuredProperties, setFeaturedProperties] = useState<Property[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { showError } = useToast();
 
   useEffect(() => {
     fetchFeaturedProperties();
@@ -29,6 +31,8 @@ const FeaturedProperties: React.FC = () => {
       setFeaturedProperties(data);
     } catch (error) {
       console.error('Error fetching featured properties:', error);
+      showError('Error', 'Failed to load featured properties. Please try again.'); // ADDED: Error handling
+      setFeaturedProperties([]); // ADDED: Clear properties on error
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +61,27 @@ const FeaturedProperties: React.FC = () => {
   }
 
   if (featuredProperties.length === 0) {
-    return null; // Don't show section if no featured properties
+    // MODIFIED: Display a message if no properties are found or an error occurred
+    return (
+      <section className="py-12 bg-neutral-100">
+        <div className="container mx-auto px-4">
+          <div className="text-center">
+            <h2 className="font-heading font-bold text-2xl md:text-3xl text-accent mb-2">
+              Properti Unggulan
+            </h2>
+            <p className="text-neutral-600 mb-4">
+              Tidak ada properti unggulan yang tersedia saat ini.
+            </p>
+            <Link
+              to="/jual"
+              className="flex items-center justify-center text-primary font-medium mt-4 md:mt-0 hover:underline"
+            >
+              Lihat Semua Properti <ChevronRight size={16} />
+            </Link>
+          </div>
+        </div>
+      </section>
+    );
   }
 
   return (
