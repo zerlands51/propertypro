@@ -17,7 +17,8 @@ import {
   Move, 
   Home, 
   DollarSign,
-  Check
+  Check,
+  Loader
 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { listingService } from '../services/listingService';
@@ -61,6 +62,7 @@ const PropertyListingPage: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 12;
+  const [error, setError] = useState<string | null>(null); // ADD THIS LINE
   
   // Advanced filters state
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -111,6 +113,7 @@ const PropertyListingPage: React.FC = () => {
   
   const fetchProperties = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       // Prepare filters
       const filters: any = {
@@ -163,9 +166,10 @@ const PropertyListingPage: React.FC = () => {
       
       setProperties(data);
       setTotalCount(count);
-    } catch (error) {
+    } catch (error: any) { // MODIFIED: Catch error as 'any' for message access
       console.error('Error fetching properties:', error);
-      showError('Error', 'Failed to load properties. Please try again.');
+      setError(error.message || 'Failed to load properties. Please try again.'); // ADDED: Set error message
+      showError('Error', error.message || 'Failed to load properties. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -679,7 +683,25 @@ const PropertyListingPage: React.FC = () => {
             <div className="lg:w-3/4">
               {isLoading ? (
                 <div className="flex justify-center py-12">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                  <div className="flex flex-col items-center">
+                    <Loader size={40} className="animate-spin text-primary mb-4" /> {/* MODIFIED: Use Loader icon */}
+                    <p className="text-neutral-600">Loading properties...</p>
+                  </div>
+                </div>
+              ) : error ? ( // ADDED: Error display
+                <div className="bg-white rounded-lg shadow-md p-8 text-center">
+                  <h3 className="font-heading font-semibold text-xl mb-2 text-red-600">
+                    Error Loading Properties
+                  </h3>
+                  <p className="text-neutral-600 mb-4">
+                    {error}
+                  </p>
+                  <button 
+                    onClick={fetchProperties} // MODIFIED: Retry fetching
+                    className="btn-primary"
+                  >
+                    Try Again
+                  </button>
                 </div>
               ) : properties.length > 0 ? (
                 <div className={`
@@ -695,7 +717,7 @@ const PropertyListingPage: React.FC = () => {
               ) : (
                 <div className="bg-white rounded-lg shadow-md p-8 text-center">
                   <h3 className="font-heading font-semibold text-xl mb-2">
-                    Tidak ada properti yang ditemukan
+                    Tidak ada iklan yang ditemukan
                   </h3>
                   <p className="text-neutral-600 mb-4">
                     Coba ubah filter pencarian Anda untuk melihat lebih banyak properti
