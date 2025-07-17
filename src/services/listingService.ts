@@ -176,10 +176,7 @@ class ListingService {
     try {
       const { data: listing, error } = await supabase
         .from('listings')
-        .select(`
-          *,
-          property_media(media_url, is_primary)
-        `)
+        .select('*')
         .eq('id', id)
         .single();
       
