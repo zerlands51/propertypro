@@ -414,256 +414,7 @@ class ListingService {
     }
   }
 
-  /**
-   * Enrich listings with related data (locations, user profiles)
-   * This avoids complex joins that can cause timeouts
-   */
   private async _enrichListingsWithRelatedData(listings: any[]): Promise<any[]> {
-    if (!listings.length) return [];
-    
-    try {
-      // Extract all unique IDs needed for related data
-      
-
-
-
-
-Thoughts
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-I appreciate you reaching out with this critical performance issue. Analyzing slow response times and "no results" requires a deep dive into various system components. As an AI, I cannot directly access your live system, monitor real-time metrics, or inspect server logs and database performance metrics. Therefore, I cannot provide specific values for:
-
-Current average response time for property searches
-Expected response time benchmark
-Database query performance metrics (e.g., EXPLAIN ANALYZE output)
-Server logs during search operations
-Any error messages or timeout notifications (beyond what's already provided)
-Recent changes to the search functionality
-Current system load and resource utilization
-Database indexing status
-Cache implementation status
-However, I can thoroughly review the provided frontend and service layer code (src/pages/PropertyListingPage.tsx and src/services/listingService.ts) to identify potential architectural and logical bottlenecks that commonly lead to the symptoms you're describing.
-
-Analysis of Provided Code
-src/services/listingService.ts
-The listingService.ts file contains the getAllListings function, which is responsible for querying properties from Supabase.
-
-Key Observations:
-
-Bulk Data Enrichment (Attempted): The enrichListingsWithRelatedData function attempts to fetch related data (property_media, locations, user_profiles) in bulk using in clauses. This is a good pattern to avoid the N+1 query problem.
-N+1 Query Problem (Actual): Despite the bulk fetching attempt, the mapDbListingsToProperties function then iterates through the enriched listings and calls this.mapDbListingToProperty(listing). Inside mapDbListingToProperty, this.enrichListingWithRelatedData(listing) is called, which performs individual Supabase queries for media, locations, and user profiles for each listing. This effectively reintroduces the N+1 query problem, leading to a large number of redundant database calls, especially when fetching many listings. This is a major performance bottleneck.
-Client-Side Feature Filtering: The getAllListings function fetches data from Supabase and then performs filtering by features in JavaScript (properties.filter(...)). This means all properties matching other criteria are transferred from the database to the client, and then filtered locally. For large datasets or complex feature sets, this is inefficient and contributes to slow response times.
-Dynamic Sorting: The sorting logic is applied directly in the Supabase query, which is good.
-Pagination: Pagination is applied using range, which is standard.
-src/pages/PropertyListingPage.tsx
-This component handles the UI for property search and displays results.
-
-Key Observations:
-
-URL Parameters for Filters: Filters are managed via URL search parameters, which is good for shareability and bookmarking.
-useEffect Dependencies: The useEffect hook that triggers fetchProperties has many dependencies, ensuring the search updates when filters change.
-Local Filter State: The component uses localFilters for advanced filter inputs, which are then applied to URL parameters on applyFilters.
-Feature Filtering UI: The UI for features allows selecting multiple features, but as noted above, this filtering is currently client-side.
-Findings
-Causes for Slow Response Times:
-Critical N+1 Query Problem: The most significant bottleneck is the redundant data fetching in listingService.ts. The enrichListingsWithRelatedData function correctly fetches related data in bulk, but mapDbListingToProperty (called for each listing) then re-fetches the same related data individually. This multiplies the number of database queries by the number of listings fetched, leading to severe performance degradation.
-Inefficient Feature Filtering: Performing feature filtering client-side (properties.filter(...)) means that the database sends more data than necessary over the network, and the client-side JavaScript has to process it, which is slower than letting the database handle it with proper indexing.
-Potential Missing Database Indexes (Hypothetical): Without direct access, it's a common cause. If columns used in WHERE clauses (status, property_type, purpose, province_id, city_id, district_id) and ORDER BY clauses (created_at, views, price, building_size, land_size, is_promoted) are not indexed, database scans will be slow.
-Large Data Transfers: If descriptions or images are very large and not optimized, transferring them for many listings can slow down network response. (Images are handled separately, but descriptions are part of the main query).
-Causes for "No Results":
-Client-Side Feature Filtering Bug: A logical error in the client-side features filtering could inadvertently filter out all results. For example, if features.every() is used with an empty filters.features array, it will always return true, but if it's used incorrectly with a non-empty array, it might filter too aggressively.
-Conflicting Filters: If multiple filters are applied (e.g., a price range that excludes all available properties, or a property type/location combination with no matching data), it could lead to zero results.
-Data Mismatch: The values passed to Supabase queries (e.g., propertyType strings like 'rumah', province IDs) might not exactly match the enum values or IDs stored in the database, leading to no matches.
-Overly Restrictive Default Filters: If the default status: 'active' filter is applied, but there are no active properties for the given criteria, it will return no results.
-Recommendations
-1. Optimize Search Performance
-Fix the N+1 Query Problem (Critical):
-
-Action: Refactor listingService.ts to ensure that mapDbListingToProperty uses the already enriched data from enrichListingsWithRelatedData instead of performing new database calls. The enrichListingWithRelatedData function should be removed or refactored to only process already fetched data.
-Detailed Steps:
-Modify enrichListingsWithRelatedData: Ensure this function returns a structure that includes all necessary related data (media, location names, agent details) directly within each listing object.
-Modify mapDbListingToProperty: This function should only map the database record (which is now fully enriched) to the Property interface. It should not perform any additional Supabase queries.
-Modify getAllListings: After calling enrichListingsWithRelatedData, pass the already enriched data to mapDbListingsToProperties.
-Move Feature Filtering to Database:
-
-Action: Implement filtering by features directly in the Supabase query. Supabase supports array containment operators (@>) for text[] or jsonb columns.
-Detailed Steps:
-Database Schema: Ensure your listings.features column is of type text[] or jsonb. (Your schema shows text[], which is good).
-Modify getAllListings in listingService.ts:
-Remove the client-side properties.filter(...) for features.
-Add a Supabase filter using the cs (contains) operator for text[] or jsonb columns.
-
-// Inside getAllListings, where filters are applied
-if (filters.features && filters.features.length > 0) {
-  // For text[] column:
-  query = query.contains('features', filters.features);
-  // If features was jsonb, it would be:
-  // query = query.contains('features', JSON.stringify(filters.features));
-}
-Update PropertyListingPage.tsx: Ensure featuresFromUrl is correctly passed to listingService.getAllListings.
-Implement Database Indexing (Consult DB Admin):
-
-Action: Add appropriate indexes to columns frequently used in WHERE clauses and ORDER BY clauses.
-Recommendations:
-listings.status
-listings.property_type
-listings.purpose
-listings.created_at
-listings.views
-listings.price
-listings.building_size
-listings.land_size
-listings.province_id, listings.city_id, listings.district_id (consider composite indexes if often queried together, e.g., (province_id, city_id))
-listings.features (if using GIN index for text[] or jsonb containment queries).
-Example SQL (PostgreSQL/Supabase):
-
-CREATE INDEX idx_listings_status ON public.listings (status);
-CREATE INDEX idx_listings_type_purpose ON public.listings (property_type, purpose);
-CREATE INDEX idx_listings_created_at ON public.listings (created_at DESC);
-CREATE INDEX idx_listings_price ON public.listings (price);
-CREATE INDEX idx_listings_location ON public.listings (province_id, city_id, district_id);
--- For text[] features column, a GIN index is crucial for @> operator
-CREATE INDEX idx_listings_features_gin ON public.listings USING GIN (features);
-Consider Server-Side Caching:
-
-Action: For frequently accessed search results with common filter combinations, implement server-side caching (e.g., Redis, or Supabase's built-in caching if applicable for specific queries).
-Benefit: Reduces database load and speeds up response times for repeat queries.
-2. Fix "No Results" Issues
-Thorough Filter Logic Review:
-Action: Carefully review all filter conditions in getAllListings to ensure they are logically sound and don't inadvertently exclude valid results.
-Check:
-Are minPrice/maxPrice and priceRange filters correctly applied and not conflicting?
-Are numeric filters (bedrooms, bathrooms, buildingSize, landSize, floors) using gte/lte correctly?
-Are location filters (province, city, district) correctly chained?
-Data Consistency Verification:
-Action: Double-check that the values used in frontend filters (e.g., property type strings, location IDs) exactly match the data stored in your Supabase database. Case sensitivity or slight variations can lead to no matches.
-Tool: Use the Supabase SQL Editor to run direct queries and verify data.
-Default Filter Behavior:
-Action: Ensure that default filters (e.g., status: 'active') are appropriate. If a search should return all properties regardless of status, remove or make the status filter optional.
-3. Improve User Experience
-Loading Indicators: Ensure that loading states (isLoading) are prominently displayed during search operations to inform the user that data is being fetched.
-Debounce Search Inputs:
-Action: Implement debouncing for text-based search inputs (e.g., searchTerm in PropertyListingPage.tsx) to prevent an API call on every keystroke. This reduces unnecessary load on the backend.
-Implementation: Use a debounce utility function (e.g., from Lodash or a custom hook).
-Clear Filter State: Provide a clear "Reset Filters" button that clears all applied filters and re-runs the search. (This is already present in PropertyListingPage.tsx, ensure it works as expected).
-4. Implement Proper Error Handling
-Granular Error Messages:
-Action: Enhance error handling in listingService.ts and PropertyListingPage.tsx to provide more specific feedback to the user.
-Example: Instead of a generic "Failed to load properties," differentiate between network errors, server errors, or "no properties found matching your criteria."
-Implementation: Use the useToast hook to display these messages.
-Actionable Solutions (Code Snippets)
-1. Fix the N+1 Query Problem in src/services/listingService.ts
-This is the most critical change for performance.
-
-File: src/services/listingService.ts
-
-Changes:
-
-Remove enrichListingWithRelatedData: This function is redundant after enrichListingsWithRelatedData is optimized.
-Modify enrichListingsWithRelatedData: Ensure it returns all necessary related data directly.
-Modify mapDbListingToProperty: Update it to consume the already enriched data.
-
-// src/services/listingService.ts
-
-// ... (imports)
-
-class ListingService {
-  /**
-   * Get all listings with optional filtering, sorting, and pagination
-   */
-  async getAllListings(filters?: ListingFilters, page: number = 1, pageSize: number = 10): Promise<{
-    data: Property[];
-    count: number;
-  }> {
-    try {
-      let query = supabase
-        .from('listings')
-        .select('*', { count: 'exact' }); // Keep this simple select
-
-      // ... (apply filters and sorting as before)
-
-      // Apply pagination
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
-      query = query.range(from, to);
-      
-      const { data, error, count } = await query;
-      
-      if (error) throw error;
-
-      // MODIFIED: Pass the fetched data to the bulk enrichment function
-      const enrichedListings = await this.enrichListingsWithRelatedData(data || []);
-      
-      // MODIFIED: Map the already enriched data to Property interface
-      let properties: Property[] = this.mapDbListingsToProperties(enrichedListings);
-      
-      // REMOVED: Client-side feature filtering will be moved to Supabase query
-      // if (filters?.features && filters.features.length > 0) {
-      //   properties = properties.filter(property => {
-      //     return filters.features!.every(feature =>
-      //       property.features.includes(feature)
-      //     );
-      //   });
-      // }
-      
-      return {
-        data: properties,
-        count: count || 0
-      };
-    } catch (error) {
-      console.error('Error fetching listings:', error);
-      return { data: [], count: 0 };
-    }
-  }
-
-  /**
-   * Get a single listing by ID
-   */
-  async getListingById(id: string): Promise<Property | null> {
-    try {
-      const { data: listing, error } = await supabase
-        .from('listings')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (error) throw error;
-      if (!listing) return null;
-      
-      // MODIFIED: Use the bulk enrichment logic for a single listing too
-      // This will still perform individual fetches, but it's consistent.
-      // For single fetches, it's often acceptable.
-      const enrichedListingArray = await this.enrichListingsWithRelatedData([listing]);
-      const enrichedListing = enrichedListingArray[0]; // Get the single enriched item
-      
-      return this.mapDbListingToProperty(enrichedListing);
-    } catch (error) {
-      console.error('Error fetching listing:', error);
-      return null;
-    }
-  }
-
-  // ... (getUserListings, createListing, updateListing, updateListingStatus, deleteListing, incrementViewCount, incrementInquiryCount remain unchanged)
-
-  /**
-   * Enrich listings with related data (locations, media, etc.)
-   * This avoids complex joins that can cause timeouts
-   */
-  private async enrichListingsWithRelatedData(listings: any[]): Promise<any[]> {
     if (!listings.length) return [];
     
     try {
@@ -674,23 +425,26 @@ class ListingService {
       const districtIds = [...new Set(listings.map(listing => listing.district_id).filter(Boolean))];
       const userIds = [...new Set(listings.map(listing => listing.user_id).filter(Boolean))];
       
-      // Fetch all media for these listings
-      const { data: allMedia } = await supabase
+      // Fetch all media for these listings in one batch
+      const { data: allMedia, error: mediaError } = await supabase
         .from('property_media')
         .select('listing_id, media_url, is_primary')
         .in('listing_id', listingIds);
-      
-      // Fetch all locations in one query
-      const { data: allLocations } = await supabase
+      if (mediaError) throw mediaError;
+
+      // Fetch all locations in one batch
+      const { data: allLocations, error: locationsError } = await supabase
         .from('locations')
         .select('id, name, type')
         .in('id', [...provinceIds, ...cityIds, ...districtIds]);
+      if (locationsError) throw locationsError;
       
-      // Fetch all user profiles in one query
-      const { data: allUsers } = await supabase
+      // Fetch all user profiles in one batch
+      const { data: allUsers, error: usersError } = await supabase
         .from('user_profiles')
-        .select('id, full_name, phone, company, avatar_url')
+        .select('id, full_name, phone, company, avatar_url, email') // Include email here
         .in('id', userIds);
+      if (usersError) throw usersError;
       
       // Create lookup maps for quick access
       const mediaByListingId = new Map();
@@ -732,22 +486,59 @@ class ListingService {
         
         return {
           ...listing,
-          property_media: media,
-          province_name: province?.name || '', // Add name directly for easier mapping
-          city_name: city?.name || '',
-          district_name: district?.name || '',
-          user_profile: userProfile
+          _property_media: media, // Store as internal property
+          _province_name: province?.name || '', // Store as internal property
+          _city_name: city?.name || '',
+          _district_name: district?.name || '',
+          _agent_profile: userProfile // Store as internal property
         };
       });
     } catch (error) {
       console.error('Error enriching listings with related data:', error);
-      return listings; // Return original listings if enrichment fails
+      throw error; // Re-throw to be caught by calling function
     }
   }
 
-  // REMOVED: private async enrichListingWithRelatedData(listing: any): Promise<any> { ... }
-  // This function is no longer needed as enrichListingsWithRelatedData handles it.
-
+  private async _enrichUserListingsWithLocationData(listings: any[]): Promise<any[]> {
+    if (!listings.length) return [];
+    
+    try {
+      // Extract all unique location IDs
+      const provinceIds = [...new Set(listings.map(listing => listing.province_id).filter(Boolean))];
+      const cityIds = [...new Set(listings.map(listing => listing.city_id).filter(Boolean))];
+      
+      // Fetch all locations in one query
+      const { data: allLocations, error: locationsError } = await supabase
+        .from('locations')
+        .select('id, name, type')
+        .in('id', [...provinceIds, ...cityIds]);
+      if (locationsError) throw locationsError;
+      
+      // Create lookup map for quick access
+      const locationsById = new Map();
+      if (allLocations) {
+        allLocations.forEach(location => {
+          locationsById.set(location.id, location);
+        });
+      }
+      
+      // Enrich each listing with location names
+      return listings.map(listing => {
+        const province = locationsById.get(listing.province_id);
+        const city = locationsById.get(listing.city_id);
+        
+        return {
+          ...listing,
+          province_name: province?.name || '',
+          city_name: city?.name || ''
+        };
+      });
+    } catch (error) {
+      console.error('Error enriching user listings with location data:', error);
+      throw error; // Re-throw to be caught by calling function
+    }
+  }
+  
   // ... (uploadImage, savePropertyMedia, prepareListingData remain unchanged)
 
   /**
