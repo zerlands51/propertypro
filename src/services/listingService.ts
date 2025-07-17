@@ -165,7 +165,7 @@ class ListingService {
       };
     } catch (error) {
       console.error('Error fetching listings:', error);
-      throw error; // RE-THROW ERROR: Allow calling component to handle it
+      throw error; 
     }
   }
 
