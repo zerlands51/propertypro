@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import SearchBox from '../common/SearchBox';
 import { supabase } from '../../lib/supabase';
+import { useToast } from '../../contexts/ToastContext'; // ADD THIS LINE
 
 interface Stats {
   totalProperties: number;
@@ -17,6 +18,7 @@ const HeroSection: React.FC = () => {
     totalUsers: 0
   });
   const [isLoading, setIsLoading] = useState(true);
+  const { showError } = useToast(); // ADD THIS LINE
 
   useEffect(() => {
     fetchStats();
@@ -26,28 +28,32 @@ const HeroSection: React.FC = () => {
     setIsLoading(true);
     try {
       // Get total properties count
-      const { count: propertiesCount } = await supabase
+      const { count: propertiesCount, error: propertiesError } = await supabase
         .from('listings')
         .select('*', { count: 'exact', head: true });
-      
+      if (propertiesError) throw propertiesError; // ADDED: Error check
+
       // Get total properties for sale count
-      const { count: propertiesforsaleCount } = await supabase
+      const { count: propertiesforsaleCount, error: forSaleError } = await supabase
         .from('listings')
         .select('*', { count: 'exact', head: true })
         .eq('purpose', 'jual');
+      if (forSaleError) throw forSaleError; // ADDED: Error check
       
       // Get total properties for rent count
-      const { count: propertiesforrentCount } = await supabase
+      const { count: propertiesforrentCount, error: forRentError } = await supabase
         .from('listings')
         .select('*', { count: 'exact', head: true })
         .eq('purpose', 'sewa');
+      if (forRentError) throw forRentError; // ADDED: Error check
       
       // Get total users count
-      const { count: usersCount } = await supabase
+      const { count: usersCount, error: usersError } = await supabase
         .from('user_profiles')
         .select('*', { count: 'exact', head: true })
         .in('role', ['user', 'agent'])
         .eq('status', 'active');
+      if (usersError) throw usersError; // ADDED: Error check
       
       setStats({
         totalProperties: propertiesCount || 0,
@@ -55,14 +61,15 @@ const HeroSection: React.FC = () => {
         totalPropertiesForRent: propertiesforrentCount || 0,
         totalUsers: usersCount || 0
       });
-    } catch (error) {
+    } catch (error: any) { // MODIFIED: Catch error as 'any'
       console.error('Error fetching stats:', error);
+      showError('Error', error.message || 'Failed to load hero section statistics.'); // ADDED: User feedback
       // Use fallback values if there's an error
       setStats({
-        totalProperties: 10000,
+        totalProperties: 0, // MODIFIED: Set to 0 on error
         totalPropertiesForSale: 0,
         totalPropertiesForRent: 0,
-        totalUsers: 15000
+        totalUsers: 0
       });
     } finally {
       setIsLoading(false);
