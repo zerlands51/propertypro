@@ -184,13 +184,12 @@ class ListingService {
       if (!listing) return null;
       
       const enrichedListingArray = await this._enrichListingsWithRelatedData([listing]);
-      const enrichedListing = enrichedListingArray[0]; // Get the single enriched item
+      const enrichedListing = enrichedListingArray[0]; 
       
-      // MODIFIED LINE: Map the already enriched data to Property interface
       return this._mapDbListingToProperty(enrichedListing);
     } catch (error) {
       console.error('Error fetching listing:', error);
-      throw error; // RE-THROW ERROR: Allow calling component to handle it
+      throw error; 
     }
   }
 
