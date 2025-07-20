@@ -657,7 +657,7 @@ class ListingService {
     };
   }
 
-  private _mapDbListingToProperty(dbListing: any): Property {
+  private mapDbListingToProperty(dbListing: any): Property {
     const province = dbListing._province_name || '';
     const city = dbListing._city_name || '';
     const district = dbListing._district_name || '';
