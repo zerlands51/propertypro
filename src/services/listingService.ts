@@ -164,7 +164,7 @@ class ListingService {
 
       const enrichedListings = await this._enrichListingsWithRelatedData(data || []);
       
-      let properties: Property[] = this._mapDbListingsToProperties(enrichedListings);
+      let properties: Property[] = this.mapDbListingsToProperties(enrichedListings);
       
       return {
         data: properties,
