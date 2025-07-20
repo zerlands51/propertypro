@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { 
   Heart, 
   MapPin, 
+  Loader,
   Bed, 
   Bath, 
   Move, 
