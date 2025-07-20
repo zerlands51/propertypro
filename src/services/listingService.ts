@@ -453,7 +453,7 @@ class ListingService {
       // Fetch all user profiles in one batch
       const { data: allUsers, error: usersError } = await supabase
         .from('user_profiles')
-        .select('id, full_name, phone, company, avatar_url, email') // Include email here
+        .select('id, full_name, phone, company, avatar_url')
         .in('id', userIds);
       if (usersError) throw usersError;
       
