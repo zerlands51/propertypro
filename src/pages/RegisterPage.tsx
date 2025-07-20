@@ -20,7 +20,7 @@ const RegisterPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
-  const { signUp, isAuthenticated, loading, error, clearError } = useAuth();
+  const { signUp, isAuthenticated, loading, error, clearError, user } = useAuth();
   const { showError, showSuccess } = useToast();
   const navigate = useNavigate();
 
