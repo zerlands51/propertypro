@@ -312,6 +312,13 @@ class ListingService {
         await this.savePropertyMedia(listingId, formData.images);
       }
       
+      // Update property counts for locations
+      await this.updateLocationPropertyCounts([
+        formData.province,
+        formData.city,
+        formData.district
+      ], 'increment');
+      
       return listingId;
     } catch (error) {
       console.error('Error creating listing:', error);
@@ -324,6 +331,15 @@ class ListingService {
    */
   async updateListing(id: string, formData: ListingFormData, userId: string): Promise<boolean> {
     try {
+      // Get current listing data to compare location changes
+      const { data: currentListing, error: fetchError } = await supabase
+        .from('listings')
+        .select('province_id, city_id, district_id')
+        .eq('id', id)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
       // Prepare listing data
       const listingData = this.prepareListingData(formData, userId);
       
@@ -334,6 +350,35 @@ class ListingService {
         .eq('id', id);
       
       if (error) throw error;
+      
+      // Update property counts if locations changed
+      const oldLocationIds = [
+        currentListing.province_id,
+        currentListing.city_id,
+        currentListing.district_id
+      ].filter(Boolean);
+      
+      const newLocationIds = [
+        formData.province,
+        formData.city,
+        formData.district
+      ].filter(Boolean);
+      
+      // Check if any location changed
+      const locationChanged = oldLocationIds.some((oldId, index) => oldId !== newLocationIds[index]) ||
+                             oldLocationIds.length !== newLocationIds.length;
+      
+      if (locationChanged) {
+        // Decrement counts for old locations
+        if (oldLocationIds.length > 0) {
+          await this.updateLocationPropertyCounts(oldLocationIds, 'decrement');
+        }
+        
+        // Increment counts for new locations
+        if (newLocationIds.length > 0) {
+          await this.updateLocationPropertyCounts(newLocationIds, 'increment');
+        }
+      }
       
       // Delete existing media
       await supabase
@@ -380,6 +425,15 @@ class ListingService {
    */
   async deleteListing(id: string, userId: string): Promise<boolean> {
     try {
+      // Get listing location data before deletion
+      const { data: listing, error: fetchError } = await supabase
+        .from('listings')
+        .select('province_id, city_id, district_id')
+        .eq('id', id)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
       // Delete property media first (foreign key constraint)
       const { error: mediaError } = await supabase
         .from('property_media')
@@ -395,6 +449,17 @@ class ListingService {
         .eq('id', id);
       
       if (error) throw error;
+      
+      // Update property counts for locations
+      const locationIds = [
+        listing.province_id,
+        listing.city_id,
+        listing.district_id
+      ].filter(Boolean);
+      
+      if (locationIds.length > 0) {
+        await this.updateLocationPropertyCounts(locationIds, 'decrement');
+      }
       
       return true;
     } catch (error) {
@@ -712,6 +777,129 @@ class ListingService {
 
   private mapDbListingsToProperties(dbListings: any[]): Property[] {
     return dbListings.map(listing => this.mapDbListingToProperty(listing));
+  }
+
+  /**
+   * Update property counts for locations
+   */
+  private async updateLocationPropertyCounts(
+    locationIds: string[], 
+    operation: 'increment' | 'decrement'
+  ): Promise<void> {
+    try {
+      // Filter out empty/null location IDs
+      const validLocationIds = locationIds.filter(id => id && id.trim() !== '');
+      
+      if (validLocationIds.length === 0) {
+        return;
+      }
+      
+      // Update each location's property count
+      for (const locationId of validLocationIds) {
+        if (operation === 'increment') {
+          // Increment property count
+          const { error } = await supabase
+            .from('locations')
+            .update({
+              property_count: supabase.raw('property_count + 1'),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', locationId);
+          
+          if (error) {
+            console.error(`Error incrementing property count for location ${locationId}:`, error);
+          }
+        } else {
+          // Decrement property count (but don't go below 0)
+          const { error } = await supabase
+            .from('locations')
+            .update({
+              property_count: supabase.raw('GREATEST(property_count - 1, 0)'),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', locationId);
+          
+          if (error) {
+            console.error(`Error decrementing property count for location ${locationId}:`, error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error updating location property counts:', error);
+    }
+  }
+
+  /**
+   * Recalculate and fix all location property counts
+   * This method can be used to fix existing data inconsistencies
+   */
+  async recalculateLocationPropertyCounts(): Promise<void> {
+    try {
+      console.log('Starting property count recalculation...');
+      
+      // Get all locations
+      const { data: locations, error: locationsError } = await supabase
+        .from('locations')
+        .select('id, name, type');
+      
+      if (locationsError) throw locationsError;
+      
+      if (!locations) {
+        console.log('No locations found');
+        return;
+      }
+      
+      // For each location, count the actual number of properties
+      for (const location of locations) {
+        let actualCount = 0;
+        
+        // Count properties based on location type
+        if (location.type === 'provinsi') {
+          const { count } = await supabase
+            .from('listings')
+            .select('*', { count: 'exact', head: true })
+            .eq('province_id', location.id)
+            .in('status', ['active', 'pending']);
+          
+          actualCount = count || 0;
+        } else if (location.type === 'kota') {
+          const { count } = await supabase
+            .from('listings')
+            .select('*', { count: 'exact', head: true })
+            .eq('city_id', location.id)
+            .in('status', ['active', 'pending']);
+          
+          actualCount = count || 0;
+        } else if (location.type === 'kecamatan') {
+          const { count } = await supabase
+            .from('listings')
+            .select('*', { count: 'exact', head: true })
+            .eq('district_id', location.id)
+            .in('status', ['active', 'pending']);
+          
+          actualCount = count || 0;
+        }
+        
+        // Update the location's property count
+        const { error: updateError } = await supabase
+          .from('locations')
+          .update({
+            property_count: actualCount,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', location.id);
+        
+        if (updateError) {
+          console.error(`Error updating count for location ${location.name}:`, updateError);
+        } else {
+          console.log(`Updated ${location.name} (${location.type}): ${actualCount} properties`);
+        }
+      }
+      
+      console.log('Property count recalculation completed');
+    } catch (error) {
+      console.error('Error recalculating location property counts:', error);
+    }
   }
 }
 
